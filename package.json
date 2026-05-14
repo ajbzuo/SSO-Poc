@@ -5,7 +5,7 @@
   "description": "Proof of concept custom SAML bridge on top of Zephr IDM.",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
