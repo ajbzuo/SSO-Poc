@@ -183,11 +183,13 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
             ? premiumMarkup
             : `
               <p>This premium section is intentionally hidden until the visitor is authenticated through the bridge or a Zephr-managed wall completes the journey.</p>
+              <!-- ZEPHR_FEATURE sso-regwall -->
               <div class="wall-slot zephr-feature-slot" id="zephr-article-wall-slot">
                 <strong>Article registration or login wall</strong>
                 <p>Target selector: <code>#zephr-article-wall-slot</code></p>
                 <p class="meta">Attach a Zephr-managed registration wall or login wall here. The app gives you the placeholder; Zephr owns the actual journey.</p>
               </div>
+              <!-- ZEPHR_FEATURE_END sso-regwall -->
             `
         }
       </article>
