@@ -20,8 +20,6 @@ services:
         sync: false
       - key: DEFAULT_REDIRECT_URL
         value: /
-      - key: SAML_MODE
-        value: mock
       - key: SAML_ENTRY_POINT
         sync: false
       - key: SAML_ISSUER
@@ -42,11 +40,11 @@ services:
         value: "false"
       - key: SAML_ACCEPTED_CLOCK_SKEW_MS
         value: "5000"
-      - key: ZEPHR_MODE
-        value: mock
       - key: ZEPHR_BASE_URL
         sync: false
-      - key: ZEPHR_API_KEY
+      - key: ZEPHR_ADMIN_ACCESS_KEY
+        sync: false
+      - key: ZEPHR_ADMIN_SECRET_KEY
         sync: false
       - key: ZEPHR_SITE_ID
         sync: false
@@ -56,6 +54,14 @@ services:
         sync: false
       - key: ZEPHR_CREATE_ANON_SESSION
         value: "false"
+      - key: ZEPHR_FOREIGN_KEY_NAME
+        value: SAML_SUBJECT
+      - key: ZEPHR_REQUIRED_GRANT_IDS
+        sync: false
+      - key: ZEPHR_REQUIRED_PRODUCT_IDS
+        sync: false
+      - key: ZEPHR_SESSION_COOKIE_DOMAIN
+        sync: false
       - key: ZEPHR_LOGIN_WALL_LABEL
         value: Login Wall
       - key: ZEPHR_REGISTRATION_WALL_LABEL

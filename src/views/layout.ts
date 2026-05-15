@@ -177,6 +177,22 @@ export function renderDocument(options: RenderDocumentOptions) {
         color: var(--muted);
         font-size: 0.92rem;
       }
+      .saml-hint-panel {
+        margin-top: 18px;
+        max-width: min(640px, 100%);
+      }
+      .saml-hint-panel .saml-hint-form {
+        gap: 10px;
+      }
+      .saml-hint-input {
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--panel-border);
+        font: inherit;
+        max-width: 22rem;
+        background: #fff;
+        color: var(--text);
+      }
     </style>
     ${browserSdkScript}
   </head>

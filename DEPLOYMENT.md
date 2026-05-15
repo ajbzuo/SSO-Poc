@@ -1,104 +1,56 @@
-# Deployment Guide
+# Deployment
 
-## Render deployment
+This app now assumes the production-shaped flow:
 
-This app is designed to run on Render as a Node web service.
+- the website is hosted on Render or another Node host
+- a Zephr wall on the site triggers enterprise SSO
+- the app performs SP-initiated SAML login
+- after ACS, the backend checks Zephr for an existing user and active grant
+- only users who pass that check are treated as signed in on the site
 
-### 1. Push the repo to GitHub or another Git remote
+## Render
 
-Render deploys from a Git repository. A `render.yaml` file is included so Render can detect a sensible default service definition.
-
-### 2. Create the Render web service
-
-Use the repository root as the Render service root.
-
-The included Render config expects:
-
-- Build command: `npm ci && npm run build`
-- Start command: `npm start`
-- Health check path: `/health`
-
-### 3. Set production environment variables
-
-At minimum, set these before testing anything real:
+Required environment variables:
 
 - `APP_BASE_URL`
 - `SESSION_SECRET`
-- `SAML_MODE`
-- `ZEPHR_MODE`
+- `SAML_ENTRY_POINT`
+- `SAML_ISSUER`
+- `SAML_CALLBACK_URL`
+- `SAML_AUDIENCE` (optional if same as issuer)
+- `SAML_IDP_ISSUER` (optional)
+- `SAML_IDP_CERT`
+- `SAML_PRIVATE_KEY` (optional)
+- `SAML_PUBLIC_CERT` (optional)
+- `ZEPHR_BASE_URL`
+- `ZEPHR_ADMIN_ACCESS_KEY`
+- `ZEPHR_ADMIN_SECRET_KEY`
+- `ZEPHR_SITE_ID` (optional, but recommended)
+- `ZEPHR_PUBLIC_BASE_URL` (optional)
+- `ZEPHR_BROWSER_SDK_URL` (optional)
+- `ZEPHR_CREATE_ANON_SESSION` (optional)
+- `ZEPHR_FOREIGN_KEY_NAME` (optional, default `SAML_SUBJECT`)
+- `ZEPHR_REQUIRED_GRANT_IDS` (optional)
+- `ZEPHR_REQUIRED_PRODUCT_IDS` (optional)
+- `ZEPHR_SESSION_COOKIE_DOMAIN` (optional)
 
-For a first smoke test on Render, keep:
+## Smoke test
 
-- `SAML_MODE=mock`
-- `ZEPHR_MODE=mock`
+1. Deploy the app.
+2. Confirm `/health` returns `ok`.
+3. Open `/articles/inside-the-saml-zephr-longform-demo`.
+4. Trigger SSO with `/auth/saml/login?returnTo=/articles/inside-the-saml-zephr-longform-demo`.
+5. Verify:
+   - the IdP round-trip succeeds
+   - `/me` returns `isAuthenticated: true` only for Zephr users with a matching active grant
+   - users without a grant land on `/auth/access-denied`
 
-That lets you verify the deployment, routes, cookies, and article wall placeholders before introducing real dependencies.
+## CDN notes
 
-### 4. Smoke test the Render deployment
+If you use a third-party CDN in front of the app and still want Zephr out-of-the-box browser functionality:
 
-After deployment, verify:
-
-- `GET /health`
-- `GET /`
-- `GET /articles`
-- `GET /articles/inside-the-saml-zephr-longform-demo`
-- `GET /me`
-- `GET /auth/saml/login?returnTo=/articles/inside-the-saml-zephr-longform-demo`
-
-If that works in mock mode, the deployment path is good.
-
-### 5. Switch SAML to real mode
-
-When you are ready for a real SAML IdP:
-
-- set `SAML_MODE=real`
-- set `APP_BASE_URL` to the public URL users will hit
-- set `SAML_CALLBACK_URL` to `${APP_BASE_URL}/auth/saml/acs`
-- configure the same ACS URL in the IdP
-- set `SAML_ENTRY_POINT`, `SAML_ISSUER`, `SAML_AUDIENCE`, and `SAML_IDP_CERT`
-
-Important: the public URL must be stable. If you later place a CDN in front of Render, the IdP callback URL should eventually be the CDN-facing hostname, not the internal Render hostname.
-
-### 6. Put a CDN in front of Render
-
-Once Render works by itself, place a CDN in front of it.
-
-Requirements:
-
-- forward cookies
-- forward query strings
-- allow POST requests to `/auth/saml/acs` and `/auth/logout`
-- do not cache auth endpoints
-- avoid serving gated article HTML from a cache that ignores session state
-
-Recommended first approach:
-
-- cache public assets aggressively
-- bypass or minimize caching on article pages during auth testing
-- keep auth routes completely uncached
-
-### 7. Zephr browser/CDN testing
-
-After the CDN is in front:
-
-- point `APP_BASE_URL` at the CDN hostname
-- update `SAML_CALLBACK_URL` to the CDN hostname
-- load the Zephr browser runtime with `ZEPHR_BROWSER_SDK_URL`
-- set `ZEPHR_PUBLIC_BASE_URL`
-- optionally set `ZEPHR_CREATE_ANON_SESSION=true`
-- target Zephr walls at:
-  - `#zephr-login-wall-slot`
-  - `#zephr-registration-wall-slot`
-  - `#zephr-protected-wall-slot`
-  - `#zephr-article-wall-slot`
-
-### 8. Real Zephr IDM bridge work still required
-
-Render deployment does not remove the need to implement the real methods in `src/lib/zephr/client.ts` for:
-
-- user lookup
-- user create/update
-- Zephr session creation
-- Zephr session destruction
-
-Keep `ZEPHR_MODE=mock` until that real tenant contract is wired.
+- proxy `/blaize*` and `/zephr*` on the same origin
+- do not cache `/auth/saml/acs`
+- do not cache `/auth/logout`
+- forward cookies and query strings
+- be careful caching article HTML while testing authenticated behavior
