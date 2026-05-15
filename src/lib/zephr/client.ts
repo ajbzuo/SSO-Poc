@@ -1,148 +1,177 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { AppConfig } from '../../config.js';
-import type { ZephrSessionResult, ZephrUser, ZephrUserUpsertInput } from './types.js';
+import type { ZephrGrant, ZephrUser } from './types.js';
 
 export interface ZephrClient {
-  readonly mode: 'mock' | 'real';
   findUserByExternalId(externalId: string): Promise<ZephrUser | null>;
   findUserByEmail(email: string): Promise<ZephrUser | null>;
-  createUser(input: ZephrUserUpsertInput): Promise<ZephrUser>;
-  updateUser(userId: string, input: Partial<ZephrUserUpsertInput>): Promise<ZephrUser>;
-  createAuthenticatedSession(user: ZephrUser): Promise<ZephrSessionResult>;
+  listActiveGrants(userId: string): Promise<ZephrGrant[]>;
   destroyAuthenticatedSession(sessionId: string): Promise<void>;
 }
 
-interface MockState {
-  usersById: Map<string, ZephrUser>;
-  sessionsById: Map<string, { userId: string; createdAt: string }>;
+interface ZephrListUsersResponse {
+  results?: Array<Record<string, unknown>>;
 }
 
-const mockState: MockState = {
-  usersById: new Map(),
-  sessionsById: new Map()
-};
-
-class MockZephrClient implements ZephrClient {
-  readonly mode = 'mock' as const;
-
-  async findUserByExternalId(externalId: string) {
-    return [...mockState.usersById.values()].find((user) => user.externalId === externalId) ?? null;
-  }
-
-  async findUserByEmail(email: string) {
-    return [...mockState.usersById.values()].find((user) => user.email.toLowerCase() === email.toLowerCase()) ?? null;
-  }
-
-  async createUser(input: ZephrUserUpsertInput) {
-    const now = new Date().toISOString();
-    const user: ZephrUser = {
-      id: randomUUID(),
-      externalId: input.externalId,
-      email: input.email,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      customFields: input.customFields,
-      createdAt: now,
-      updatedAt: now
-    };
-
-    mockState.usersById.set(user.id, user);
-    return user;
-  }
-
-  async updateUser(userId: string, input: Partial<ZephrUserUpsertInput>) {
-    const existing = mockState.usersById.get(userId);
-    if (!existing) {
-      throw new Error(`Mock Zephr user not found: ${userId}`);
-    }
-
-    const updated: ZephrUser = {
-      ...existing,
-      email: input.email ?? existing.email,
-      firstName: input.firstName ?? existing.firstName,
-      lastName: input.lastName ?? existing.lastName,
-      externalId: input.externalId ?? existing.externalId,
-      customFields: {
-        ...existing.customFields,
-        ...input.customFields
-      },
-      updatedAt: new Date().toISOString()
-    };
-
-    mockState.usersById.set(userId, updated);
-    return updated;
-  }
-
-  async createAuthenticatedSession(user: ZephrUser) {
-    const sessionId = randomUUID();
-    const createdAt = new Date().toISOString();
-
-    mockState.sessionsById.set(sessionId, { userId: user.id, createdAt });
-
-    return {
-      session: {
-        sessionId,
-        cookieName: 'blaize_session',
-        cookieValue: `mock-${sessionId}`,
-        createdAt
-      },
-      syncedWithCookie: true,
-      message: 'Mock Zephr session established and mirrored into a local blaize_session cookie.'
-    };
-  }
-
-  async destroyAuthenticatedSession(sessionId: string) {
-    mockState.sessionsById.delete(sessionId);
-  }
+interface ZephrListGrantsResponse {
+  results?: Array<Record<string, unknown>>;
 }
 
 class RealZephrClient implements ZephrClient {
-  readonly mode = 'real' as const;
-
   constructor(private readonly config: AppConfig['zephr']) {}
 
-  async findUserByExternalId(_externalId: string): Promise<ZephrUser | null> {
-    await this.ensureConfigured();
-    throw new Error('TODO: Wire Zephr Admin API lookup by external subject in src/lib/zephr/client.ts.');
+  async findUserByExternalId(externalId: string): Promise<ZephrUser | null> {
+    const query = new URLSearchParams([[`foreign_key.${this.config.foreignKeyName}`, externalId]]);
+    const response = await this.request<ZephrListUsersResponse>('GET', '/v3/users', query);
+    return mapUser(response.results?.[0] ?? null, this.config.foreignKeyName);
   }
 
-  async findUserByEmail(_email: string): Promise<ZephrUser | null> {
-    await this.ensureConfigured();
-    throw new Error('TODO: Wire Zephr Admin API lookup by email in src/lib/zephr/client.ts.');
+  async findUserByEmail(email: string): Promise<ZephrUser | null> {
+    const query = new URLSearchParams([['identifiers.email_address', email]]);
+    const response = await this.request<ZephrListUsersResponse>('GET', '/v3/users', query);
+    return mapUser(response.results?.[0] ?? null, this.config.foreignKeyName);
   }
 
-  async createUser(_input: ZephrUserUpsertInput): Promise<ZephrUser> {
-    await this.ensureConfigured();
-    throw new Error('TODO: Wire Zephr Admin API create user in src/lib/zephr/client.ts.');
+  async listActiveGrants(userId: string): Promise<ZephrGrant[]> {
+    const query = new URLSearchParams([['active', 'true']]);
+    const response = await this.request<ZephrListGrantsResponse>('GET', `/v3/users/${encodeURIComponent(userId)}/grants`, query);
+    return (response.results ?? []).map(mapGrant).filter((grant): grant is ZephrGrant => Boolean(grant));
   }
 
-  async updateUser(_userId: string, _input: Partial<ZephrUserUpsertInput>): Promise<ZephrUser> {
-    await this.ensureConfigured();
-    throw new Error('TODO: Wire Zephr Admin API update user in src/lib/zephr/client.ts.');
+  async destroyAuthenticatedSession(sessionId: string): Promise<void> {
+    if (!this.config.siteId) {
+      return;
+    }
+
+    await this.request('DELETE', `/v4/sessions/${encodeURIComponent(this.config.siteId)}/${encodeURIComponent(sessionId)}`);
   }
 
-  async createAuthenticatedSession(_user: ZephrUser): Promise<ZephrSessionResult> {
-    await this.ensureConfigured();
-    throw new Error('TODO: Wire Zephr session creation or token exchange in src/lib/zephr/client.ts.');
+  private async request<T>(method: 'GET' | 'DELETE', path: string, query?: URLSearchParams): Promise<T> {
+    const queryString = query?.toString() ?? '';
+    const timestamp = Date.now().toString();
+    const nonce = randomUUID();
+    const body = '';
+    const digest = createHash('sha256')
+      .update(this.config.adminSecretKey)
+      .update(body)
+      .update(path)
+      .update(queryString)
+      .update(method)
+      .update(timestamp)
+      .update(nonce)
+      .digest('hex');
+
+    const authorization = `ZEPHR-HMAC-SHA256 ${this.config.adminAccessKey}:${timestamp}:${nonce}:${digest}`;
+    const url = new URL(path, this.config.adminBaseUrl);
+    if (queryString) {
+      url.search = queryString;
+    }
+
+    const response = await fetch(url, {
+      method,
+      headers: {
+        Authorization: authorization,
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Zephr admin request failed (${method} ${path}): ${response.status} ${response.statusText} ${text}`.trim());
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    return (await response.json()) as T;
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
   }
 
-  async destroyAuthenticatedSession(_sessionId: string): Promise<void> {
-    await this.ensureConfigured();
-    throw new Error('TODO: Wire Zephr session destruction in src/lib/zephr/client.ts.');
+  const items = value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+  return items.length > 0 ? items : undefined;
+}
+
+function mapUser(raw: Record<string, unknown> | null, foreignKeyName: string): ZephrUser | null {
+  if (!raw) {
+    return null;
   }
 
-  private async ensureConfigured() {
-    if (!this.config.baseUrl || !this.config.apiKey) {
-      throw new Error('ZEPHR_BASE_URL and ZEPHR_API_KEY are required for real Zephr mode.');
+  const identifiers = asRecord(raw.identifiers);
+  const attributes = asRecord(raw.attributes);
+  const foreignKeysRaw = raw.foreign_keys;
+  let externalId: string | undefined;
+
+  if (Array.isArray(foreignKeysRaw)) {
+    for (const entry of foreignKeysRaw) {
+      const keyRecord = asRecord(entry);
+      if (!keyRecord) {
+        continue;
+      }
+
+      const system = stringValue(keyRecord.system) ?? stringValue(keyRecord.foreign_system) ?? stringValue(keyRecord.key);
+      const value = stringValue(keyRecord.value) ?? stringValue(keyRecord.foreign_id);
+      if (system === foreignKeyName && value) {
+        externalId = value;
+        break;
+      }
     }
   }
+
+  return {
+    id: stringValue(raw.user_id) ?? stringValue(raw.id) ?? '',
+    externalId,
+    email: stringValue(identifiers?.email_address) ?? stringValue(attributes?.email_address) ?? '',
+    firstName: stringValue(attributes?.first_name),
+    lastName: stringValue(attributes?.surname) ?? stringValue(attributes?.last_name),
+    customFields: {
+      company: stringValue(attributes?.company) ?? stringValue(attributes?.org),
+      role: stringValue(attributes?.role),
+      groups: stringArray(attributes?.groups),
+      b2bAccountId: stringValue(attributes?.b2bAccountId) ?? stringValue(attributes?.account_id)
+    },
+    createdAt: stringValue(raw.created_at),
+    updatedAt: stringValue(raw.updated_at)
+  };
+}
+
+function mapGrant(raw: Record<string, unknown> | null): ZephrGrant | null {
+  if (!raw) {
+    return null;
+  }
+
+  const id = stringValue(raw.grant_id) ?? stringValue(raw.id);
+  const userId = stringValue(raw.user_id);
+  if (!id || !userId) {
+    return null;
+  }
+
+  return {
+    id,
+    userId,
+    entitlementType: stringValue(raw.entitlement_type),
+    entitlementId: stringValue(raw.entitlement_id),
+    productId: stringValue(raw.product_id),
+    expiryState: stringValue(raw.expiry_state),
+    startTime: stringValue(raw.startTime),
+    endTime: stringValue(raw.endTime),
+    createdAt: stringValue(raw.created_at)
+  };
 }
 
 export function createZephrClient(config: AppConfig['zephr']): ZephrClient {
-  return config.mode === 'mock' ? new MockZephrClient() : new RealZephrClient(config);
-}
-
-export function resetMockZephrState() {
-  mockState.usersById.clear();
-  mockState.sessionsById.clear();
+  return new RealZephrClient(config);
 }

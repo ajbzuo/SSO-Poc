@@ -7,7 +7,7 @@ export function createIndexRouter(config: AppConfig) {
   const router = Router();
 
   router.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), samlMode: config.saml.mode, zephrMode: config.zephr.mode });
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
   router.get('/', (req, res) => {
@@ -38,11 +38,7 @@ export function createIndexRouter(config: AppConfig) {
   router.get('/me', (req, res) => {
     res.json({
       isAuthenticated: Boolean(req.session.auth?.isAuthenticated),
-      auth: req.session.auth ?? null,
-      modes: {
-        saml: config.saml.mode,
-        zephr: config.zephr.mode
-      }
+      auth: req.session.auth ?? null
     });
   });
 

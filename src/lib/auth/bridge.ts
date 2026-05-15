@@ -1,59 +1,75 @@
 import type { MappedSamlIdentity, RawSamlProfile } from '../saml/types.js';
-import { mapSamlProfile, toZephrUpsertInput } from '../mappers/userMapper.js';
-import { createZephrAuthenticatedSession } from '../zephr/sessions.js';
-import { upsertZephrUser } from '../zephr/users.js';
+import { mapSamlProfile } from '../mappers/userMapper.js';
+import { authorizeZephrUser } from '../zephr/users.js';
 import type { ZephrClient } from '../zephr/client.js';
-import type { ZephrSession, ZephrSessionResult, ZephrUser } from '../zephr/types.js';
+import type { ZephrGrantEvaluation, ZephrUser } from '../zephr/types.js';
 
 export interface SessionState {
   isAuthenticated: boolean;
   rawSamlProfile: Record<string, string | string[]>;
   samlIdentity: MappedSamlIdentity;
   zephrUser: ZephrUser;
-  zephrSession: ZephrSession;
-  zephrUpsert: {
-    succeeded: boolean;
-    operation: 'created' | 'updated';
-  };
-  zephrSessionSync: {
-    succeeded: boolean;
+  zephrGrantAccess: ZephrGrantEvaluation;
+  matchedBy: 'external-id' | 'email';
+  sessionSync: {
+    succeeded: false;
     message: string;
   };
   loggedInAt: string;
 }
 
-export interface LoginCompletionResult {
-  mappedIdentity: MappedSamlIdentity;
-  zephrUser: ZephrUser;
-  zephrSession: ZephrSessionResult;
-  authState: SessionState;
-}
+export type LoginCompletionResult =
+  | {
+      status: 'granted';
+      authState: SessionState;
+      mappedIdentity: MappedSamlIdentity;
+      zephrUser: ZephrUser;
+      grants: ZephrGrantEvaluation;
+    }
+  | {
+      status: 'missing-user' | 'missing-grant';
+      mappedIdentity: MappedSamlIdentity;
+      zephrUser: ZephrUser | null;
+      grants: ZephrGrantEvaluation;
+    };
 
 export async function completeSamlLogin(params: {
   profile: RawSamlProfile;
   zephrClient: ZephrClient;
+  requiredGrantIds: string[];
+  requiredProductIds: string[];
 }): Promise<LoginCompletionResult> {
   const mappedIdentity = mapSamlProfile(params.profile);
-  const zephrUpsert = await upsertZephrUser(params.zephrClient, toZephrUpsertInput(mappedIdentity));
-  const zephrSession = await createZephrAuthenticatedSession(params.zephrClient, zephrUpsert.user);
+  const authorization = await authorizeZephrUser(params.zephrClient, mappedIdentity, {
+    requiredGrantIds: params.requiredGrantIds,
+    requiredProductIds: params.requiredProductIds
+  });
+
+  if (authorization.status !== 'granted') {
+    return {
+      status: authorization.status,
+      mappedIdentity,
+      zephrUser: authorization.user,
+      grants: authorization.grants
+    };
+  }
 
   return {
+    status: 'granted',
     mappedIdentity,
-    zephrUser: zephrUpsert.user,
-    zephrSession,
+    zephrUser: authorization.user,
+    grants: authorization.grants,
     authState: {
       isAuthenticated: true,
       rawSamlProfile: mappedIdentity.rawAttributes,
       samlIdentity: mappedIdentity,
-      zephrUser: zephrUpsert.user,
-      zephrSession: zephrSession.session,
-      zephrUpsert: {
-        succeeded: true,
-        operation: zephrUpsert.operation
-      },
-      zephrSessionSync: {
-        succeeded: zephrSession.syncedWithCookie,
-        message: zephrSession.message
+      zephrUser: authorization.user,
+      zephrGrantAccess: authorization.grants,
+      matchedBy: authorization.matchedBy,
+      sessionSync: {
+        succeeded: false,
+        message:
+          'The app has verified the SAML identity and Zephr grant server-side. If your tenant requires a separate browser-session mirror into Zephr, wire that final cookie/session exchange in src/lib/zephr/client.ts.'
       },
       loggedInAt: new Date().toISOString()
     }

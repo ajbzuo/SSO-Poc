@@ -17,10 +17,7 @@ export function createApp(overrides?: Partial<AppDependencies>) {
   const config = overrides?.config ?? appConfig;
   const zephrClient = overrides?.zephrClient ?? createZephrClient(config.zephr);
 
-  const samlStrategy = createSamlStrategy(config);
-  if (samlStrategy) {
-    passport.use('saml', samlStrategy);
-  }
+  passport.use('saml', createSamlStrategy(config));
 
   const app = express();
   app.disable('x-powered-by');

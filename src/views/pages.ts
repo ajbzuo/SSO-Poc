@@ -21,7 +21,7 @@ function authPill(auth?: SessionState) {
     return '<span class="pill warn">Anonymous session</span>';
   }
 
-  return '<span class="pill">Authenticated through SAML bridge</span>';
+  return '<span class="pill">Authenticated through enterprise SAML</span>';
 }
 
 function logoutButton(auth?: SessionState) {
@@ -32,36 +32,35 @@ function logoutButton(auth?: SessionState) {
   return '<form method="post" action="/auth/logout"><button type="submit" class="button warn">Logout</button></form>';
 }
 
-/** Optional work email forwarded as `login_hint` to SAML IdPs that support it (e.g. Microsoft Entra). */
 function samlLoginHintForm(returnTo: string, formIdSuffix: string) {
   const safeReturn = escapeHtml(returnTo);
   const idSuffix = formIdSuffix.replace(/[^a-zA-Z0-9_-]/g, '-');
   const fieldId = `login-hint-${idSuffix}`;
   return `
     <div class="card stack saml-hint-panel">
-      <h3 style="margin:0;font-size:1.05rem;font-family:'Avenir Next','Segoe UI',sans-serif;">SAML SSO with your email provider</h3>
-      <p class="meta">Use this with a <strong>SAML</strong> app in Microsoft Entra ID, Google Workspace, Okta, or another enterprise IdP. If you are already signed in there, the IdP often completes SSO in one step without typing your password again. Consumer &quot;Sign in with Google&quot; on the web is usually <strong>OpenID Connect</strong>, not SAML; your admin creates a SAML enterprise application instead.</p>
+      <h3 style="margin:0;font-size:1.05rem;font-family:'Avenir Next','Segoe UI',sans-serif;">Single Sign-On with your work account</h3>
+      <p class="meta">The site sends the visitor to the enterprise SAML identity provider. If the visitor already has an active IdP session, sign-on can complete with little or no additional input.</p>
       <form method="get" action="/auth/saml/login" class="stack saml-hint-form">
         <input type="hidden" name="returnTo" value="${safeReturn}" />
-        <label for="${fieldId}" class="meta" style="font-weight:700;">Work email (optional)</label>
+        <label for="${fieldId}" class="meta" style="font-weight:700;">Work email (optional login hint)</label>
         <input id="${fieldId}" name="login_hint" type="email" autocomplete="username" inputmode="email" placeholder="you@company.com" class="saml-hint-input" />
         <div class="actions">
-          <button type="submit" class="button">Continue with SAML</button>
+          <button type="submit" class="button">Sign in with SSO</button>
         </div>
       </form>
-      <p class="meta">Advanced: you can also append <code>domain_hint</code> or <code>hd</code> query parameters on <code>/auth/saml/login</code> when your IdP documents them.</p>
+      <p class="meta">The app only forwards allowlisted IdP hints such as <code>login_hint</code>, <code>domain_hint</code>, and <code>hd</code>.</p>
     </div>`;
 }
 
 export function renderHomePage(config: AppConfig, auth?: SessionState) {
   const body = `
     <section class="hero">
-      <div class="eyebrow">Zephr IDM + Custom SAML Bridge</div>
-      <h1>External SAML login, Zephr-managed walls, one downstream session.</h1>
-      <p>This proof of concept keeps the authentication ceremony in your external IdP, then maps the user into Zephr IDM and mirrors a Zephr-authenticated session so the front end can continue to use Zephr JS and Zephr-configured walls.</p>
+      <div class="eyebrow">Zephr wall + enterprise SAML</div>
+      <h1>Authenticate at the IdP, then verify Zephr access before unlocking the site.</h1>
+      <p>This implementation assumes the external SAML identity provider is the source of truth for authentication, while Zephr remains the downstream source of truth for the user record and grants.</p>
       ${authPill(auth)}
       <div class="actions">
-        <a class="button" href="/auth/saml/login?returnTo=/protected">Start SAML login</a>
+        <a class="button" href="/auth/saml/login?returnTo=/protected">Start SSO sign-in</a>
         <a class="button secondary" href="/articles">Browse demo articles</a>
         <a class="button secondary" href="/protected">Open protected page</a>
         <a class="button secondary" href="/setup-guide">Open setup guide</a>
@@ -74,21 +73,21 @@ export function renderHomePage(config: AppConfig, auth?: SessionState) {
     <section class="grid two">
       <article class="card stack">
         <h2>Current auth status</h2>
-        <p class="meta">This is the server-side session state that the bridge maintains after ACS or mock login.</p>
+        <p class="meta">This is the server-side state after the ACS callback has validated the assertion and checked the Zephr user and grant.</p>
         <pre>${renderJson(auth ?? { isAuthenticated: false })}</pre>
       </article>
       <article class="card stack">
-        <h2>Zephr sync checkpoint</h2>
-        <p class="meta">The SAML bridge upserts a Zephr user and then creates a Zephr-authenticated session so the browser-side Zephr runtime can act on the same visitor.</p>
+        <h2>Access checkpoint</h2>
+        <p class="meta">The bridge only allows access when the authenticated SAML user already exists in Zephr and has at least one matching active grant.</p>
         <pre>${renderJson(
           auth
             ? {
                 zephrUserId: auth.zephrUser.id,
-                externalId: auth.zephrUser.externalId,
-                upsertOperation: auth.zephrUpsert.operation,
-                zephrCookieSync: auth.zephrSessionSync
+                matchedBy: auth.matchedBy,
+                grantEvaluation: auth.zephrGrantAccess,
+                sessionSync: auth.sessionSync
               }
-            : { message: 'No authenticated bridge session yet.' }
+            : { message: 'No authenticated SSO session yet.' }
         )}</pre>
       </article>
     </section>
@@ -108,7 +107,7 @@ export function renderHomePage(config: AppConfig, auth?: SessionState) {
       </article>
       <article class="card stack">
         <h2>Wall target slots</h2>
-        <p class="meta">These are stable placeholders you can target from Zephr admin. Keep the registration and login walls configured in Zephr, not hard-coded here.</p>
+        <p class="meta">Keep login and registration experiences configured in Zephr. The app only gives them stable target slots and an SSO endpoint to open.</p>
         <div class="wall-slot zephr-feature-slot" id="zephr-login-wall-slot">
           <strong>${escapeHtml(config.zephr.wallLabels.login)}</strong>
           <p>Target selector: <code>#zephr-login-wall-slot</code></p>
@@ -151,7 +150,7 @@ export function renderArticlesIndexPage(config: AppConfig, articles: DemoArticle
     <section class="hero">
       <div class="eyebrow">Demo website</div>
       <h1>Sample articles you can protect with a Zephr-managed wall.</h1>
-      <p>This page turns the proof of concept into a more realistic content demo. Anonymous users can browse article summaries, then hit article pages with teaser copy and a stable wall target for Zephr.</p>
+      <p>Anonymous visitors can browse article summaries first, then hit article pages with teaser copy and a stable feature target for the Zephr CDN wall.</p>
       ${authPill(auth)}
       <div class="actions">
         <a class="button secondary" href="/">Back home</a>
@@ -187,7 +186,7 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
       <p class="meta">By ${escapeHtml(article.author)} · ${escapeHtml(article.readTime)}</p>
       ${authPill(auth)}
       <div class="actions">
-        <a class="button" href="${loginUrl}">${isAuthenticated ? 'Refresh sign-in state' : 'Login to continue reading'}</a>
+        <a class="button" href="${loginUrl}">${isAuthenticated ? 'Re-run SSO sign-in' : 'Sign in with SSO to continue'}</a>
         <a class="button secondary" href="/articles">More articles</a>
         ${logoutButton(auth)}
       </div>
@@ -210,11 +209,11 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
               </div>
             `
             : `
-              <p>This premium section is intentionally hidden until the visitor is authenticated through the bridge or a Zephr-managed wall completes the journey.</p>
+              <p>This premium section stays locked until the visitor completes enterprise SSO and the matching Zephr user is confirmed to have an active grant.</p>
               <div class="wall-slot zephr-feature-slot" id="zephr-article-wall-slot">
-                <strong>Article registration or login wall</strong>
+                <strong>Article SSO wall</strong>
                 <p>Target selector: <code>#zephr-article-wall-slot</code></p>
-                <p class="meta">Attach a Zephr-managed registration wall or login wall here. The app gives you the placeholder; Zephr owns the actual journey.</p>
+                <p class="meta">Your Zephr wall can open <code>/auth/saml/login?returnTo=/articles/${escapeHtml(article.slug)}</code> in a popup or new tab, just like the client flow.</p>
               </div>
             `
         }
@@ -231,12 +230,13 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
                 article: article.slug,
                 result: 'full-content-visible',
                 zephrUserId: auth?.zephrUser.id,
-                externalId: auth?.samlIdentity.externalId
+                externalId: auth?.samlIdentity.externalId,
+                grantEvaluation: auth?.zephrGrantAccess
               }
             : {
                 article: article.slug,
                 result: 'teaser-only',
-                recommendation: 'Attach a Zephr wall to #zephr-article-wall-slot or use the SAML login button.'
+                recommendation: 'Use the Zephr wall to trigger enterprise SSO and let the backend verify the Zephr grant.'
               }
         )}</pre>
       </article>
@@ -259,11 +259,11 @@ export function renderProtectedPage(config: AppConfig, auth?: SessionState) {
       <h1>${auth?.isAuthenticated ? 'Protected content is available.' : 'Anonymous visitors stop here.'}</h1>
       <p>${
         auth?.isAuthenticated
-          ? 'The server-side bridge session is active, the mapped Zephr user exists, and the page can now behave like a signed-in Zephr-backed experience.'
-          : 'This page intentionally renders an anonymous-state version first so you can attach a Zephr-managed login or registration wall without hard-coding the form in this app.'
+          ? 'The SAML assertion was accepted and the matching Zephr user passed the active-grant check.'
+          : 'This page intentionally renders the anonymous-state version first so you can attach a Zephr-managed wall or send the user to enterprise SSO from the UI.'
       }</p>
       <div class="actions">
-        <a class="button" href="/auth/saml/login?returnTo=/protected">${auth?.isAuthenticated ? 'Re-run SAML login' : 'Authenticate now'}</a>
+        <a class="button" href="/auth/saml/login?returnTo=/protected">${auth?.isAuthenticated ? 'Re-run SSO sign-in' : 'Authenticate now'}</a>
         <a class="button secondary" href="/">Back home</a>
       </div>
       ${samlLoginHintForm('/protected', 'protected')}
@@ -278,11 +278,12 @@ export function renderProtectedPage(config: AppConfig, auth?: SessionState) {
                 result: 'allowed',
                 message: 'Protected content rendered.',
                 zephrUserId: auth.zephrUser.id,
-                externalId: auth.samlIdentity.externalId
+                grantEvaluation: auth.zephrGrantAccess,
+                matchedBy: auth.matchedBy
               }
             : {
                 result: 'denied',
-                message: 'Authenticate through the bridge or attach a Zephr wall to the slot on this page.'
+                message: 'Authenticate through SSO and pass the Zephr grant check.'
               }
         )}</pre>
       </article>
@@ -291,7 +292,7 @@ export function renderProtectedPage(config: AppConfig, auth?: SessionState) {
         <div class="wall-slot zephr-feature-slot" id="zephr-protected-wall-slot">
           <strong>${escapeHtml(config.zephr.wallLabels.protected)}</strong>
           <p>Target selector: <code>#zephr-protected-wall-slot</code></p>
-          <p class="meta">Use this target for a Zephr browser or HTML feature that contains your configured login or registration journey.</p>
+          <p class="meta">Use this target for a Zephr browser or HTML feature that contains the SSO CTA or your alternate access journey.</p>
         </div>
       </article>
     </section>
@@ -317,8 +318,8 @@ export function renderSetupGuidePage(config: AppConfig) {
   const body = `
     <section class="hero">
       <div class="eyebrow">Local setup guide</div>
-      <h1>Exact end-to-end steps for mock mode first, then real SAML and real Zephr.</h1>
-      <p>This guide is intentionally local to the app so you can stand up the POC without bouncing between product docs. The app is mock-first, then real-mode-ready at the integration seams.</p>
+      <h1>Exact end-to-end steps for enterprise SAML + Zephr grant verification.</h1>
+      <p>This guide is intentionally local to the app so you can stand up the production-shaped flow without bouncing between external notes.</p>
       <div class="actions">
         <a class="button secondary" href="/">Back home</a>
       </div>
@@ -326,101 +327,55 @@ export function renderSetupGuidePage(config: AppConfig) {
 
     <section class="grid">
       <article class="card stack">
-        <h2>1. Start in full local demo mode</h2>
+        <h2>1. Configure the app</h2>
         <ol>
           <li>Copy <code>.env.example</code> to <code>.env</code>.</li>
-          <li>Leave <code>SAML_MODE=mock</code> and <code>ZEPHR_MODE=mock</code>.</li>
-          <li>Set <code>APP_BASE_URL</code> and <code>SAML_CALLBACK_URL</code> to the same local origin, usually <code>http://localhost:3000</code>.</li>
-          <li>Install dependencies, then run <code>npm run dev</code>.</li>
-          <li>Open <code>/</code>, click <code>Start SAML login</code>, and confirm the home page shows a mapped user plus a mock <code>blaize_session</code> cookie sync message.</li>
+          <li>Set <code>APP_BASE_URL</code> to the public site origin.</li>
+          <li>Set <code>SAML_ENTRY_POINT</code>, <code>SAML_ISSUER</code>, <code>SAML_CALLBACK_URL</code>, and <code>SAML_IDP_CERT</code>.</li>
+          <li>Set <code>ZEPHR_BASE_URL</code> to your Zephr admin API base URL, plus <code>ZEPHR_ADMIN_ACCESS_KEY</code> and <code>ZEPHR_ADMIN_SECRET_KEY</code>.</li>
+          <li>Optionally set <code>ZEPHR_REQUIRED_GRANT_IDS</code> and/or <code>ZEPHR_REQUIRED_PRODUCT_IDS</code> if not every active grant should unlock this site.</li>
+          <li>Run <code>npm run dev</code> locally or deploy the app behind your CDN.</li>
         </ol>
       </article>
 
       <article class="card stack">
-        <h2>2. Configure SAML in your IdP (Okta, Microsoft Entra, Google Workspace)</h2>
-        <p class="meta">All of these are SAML 2.0 enterprise flows. Consumer &quot;Sign in with Google&quot; on arbitrary websites is usually OpenID Connect, not SAML; your directory admin creates a SAML enterprise app instead.</p>
-        <h3>Okta</h3>
+        <h2>2. Configure the enterprise SAML app</h2>
         <ol>
-          <li>Create a new SAML 2.0 application in Okta.</li>
-          <li>Set the Single sign-on URL to <code>${escapeHtml(config.appBaseUrl)}/auth/saml/acs</code>.</li>
-          <li>Set the Audience URI / SP Entity ID to <code>${escapeHtml(config.saml.issuer)}</code>.</li>
-          <li>Prefer a persistent or otherwise immutable NameID format, because this app maps NameID to <code>externalId</code>.</li>
-          <li>Add attribute statements for <code>email</code>, <code>givenName</code>, <code>surname</code>, <code>company</code>, <code>role</code>, optional <code>groups</code>, and optional <code>account_id</code>.</li>
-          <li>Download or copy the IdP signing certificate in PEM form and paste it into <code>SAML_IDP_CERT</code>.</li>
-          <li>Copy the Okta SSO URL into <code>SAML_ENTRY_POINT</code> and the Okta issuer into <code>SAML_IDP_ISSUER</code>.</li>
-        </ol>
-        <h3>Microsoft Entra ID</h3>
-        <ol>
-          <li>Create an enterprise application with SAML-based sign-on.</li>
-          <li>Set the Reply URL (ACS) to <code>${escapeHtml(config.appBaseUrl)}/auth/saml/acs</code> and the Identifier (Entity ID) to <code>${escapeHtml(config.saml.issuer)}</code>.</li>
-          <li>Map claims so the SAML assertion includes <code>email</code> (or a claim this app maps as email) and a stable Name ID.</li>
-          <li>Paste the base64 SAML signing certificate into <code>SAML_IDP_CERT</code> as a PEM block.</li>
-          <li>Use the Microsoft login URL from the SAML configuration as <code>SAML_ENTRY_POINT</code> and set <code>SAML_IDP_ISSUER</code> to the Entra issuer if you rely on issuer validation.</li>
-          <li>For faster account selection, use the optional work email field on the site or call <code>/auth/saml/login?login_hint=user@tenant.com</code>; Entra often honors <code>login_hint</code> on SAML SP-initiated requests.</li>
-        </ol>
-        <h3>Google Workspace</h3>
-        <ol>
-          <li>In Google Admin, add a SAML app for this SP.</li>
-          <li>Use the same ACS path and entity ID pattern as above.</li>
-          <li>Expose primary email and name fields with attribute names that match this app’s mapper (for example <code>email</code>, <code>givenName</code>, <code>surname</code>).</li>
-          <li>Place the Google IdP certificate and SSO URL into <code>SAML_IDP_CERT</code> and <code>SAML_ENTRY_POINT</code>.</li>
+          <li>Set the ACS / Reply URL to <code>${escapeHtml(config.saml.callbackUrl)}</code>.</li>
+          <li>Set the SP Entity ID / Audience to <code>${escapeHtml(config.saml.issuer)}</code>.</li>
+          <li>Prefer an immutable NameID because the app first tries to match the Zephr user by external subject.</li>
+          <li>Expose email plus any useful profile fields such as <code>givenName</code>, <code>surname</code>, <code>company</code>, <code>role</code>, and <code>groups</code>.</li>
+          <li>If the client IdP supports login hints, the app forwards <code>login_hint</code>, <code>domain_hint</code>, and <code>hd</code>.</li>
         </ol>
       </article>
 
       <article class="card stack">
-        <h2>3. Switch the app from mock SAML to real SAML</h2>
+        <h2>3. Configure Zephr</h2>
         <ol>
-          <li>Change <code>SAML_MODE=real</code>.</li>
-          <li>Confirm <code>SAML_ENTRY_POINT</code>, <code>SAML_ISSUER</code>, <code>SAML_CALLBACK_URL</code>, and <code>SAML_IDP_CERT</code> are set.</li>
-          <li>If your IdP requires signed AuthnRequests, add <code>SAML_PRIVATE_KEY</code> and <code>SAML_PUBLIC_CERT</code>.</li>
-          <li>Keep <code>SAML_ACCEPTED_CLOCK_SKEW_MS</code> small and use the default audience/issuer pairing unless your IdP needs a different audience string.</li>
-          <li>Leave <code>SAML_FORCE_AUTHN=false</code> unless you need the IdP to ignore existing sessions; seamless SSO depends on the IdP reusing an active session.</li>
-          <li>Optional: append <code>login_hint</code>, <code>domain_hint</code>, or <code>hd</code> to <code>/auth/saml/login</code> when your IdP documents support; the app forwards only those allowlisted parameters.</li>
-          <li>Restart the app and trigger <code>/auth/saml/login</code>. The ACS route will validate signature, audience, issuer, response timing, ACS destination, and <code>InResponseTo</code> through the SAML library configuration.</li>
+          <li>Ensure the user already exists in Zephr before SSO is attempted.</li>
+          <li>Store the upstream SAML subject in a Zephr foreign key named <code>${escapeHtml(config.zephr.foreignKeyName)}</code> if you want the strongest match.</li>
+          <li>Confirm the user has at least one active grant, or one of the required grant/product IDs if you configured filters.</li>
+          <li>Keep the wall itself in Zephr and target the article slot wrapped by <code><!-- ZEPHR_FEATURE sso-regwall --></code>.</li>
         </ol>
       </article>
 
       <article class="card stack">
-        <h2>4. Configure Zephr JS and wall targets</h2>
+        <h2>4. CDN/browser integration</h2>
         <ol>
-          <li>Set <code>ZEPHR_PUBLIC_BASE_URL</code> to your Zephr live domain.</li>
-          <li>Set <code>ZEPHR_BROWSER_SDK_URL</code> to the Zephr browser script served from your delivery/CDN setup.</li>
-          <li>Use the browser SDK on the front end. This page expects a global <code>BlaizeSDK</code> object and will call <code>getAccount</code> and <code>getProfile</code> when present.</li>
-          <li>If your Zephr delivery setup needs an explicit anonymous session bootstrap before walls can evaluate, set <code>ZEPHR_CREATE_ANON_SESSION=true</code> so the page calls <code>BlaizeSDK.getAnonymousSession(...)</code> first.</li>
-          <li>Create Zephr-managed login and registration journeys in Zephr admin.</li>
-          <li>Target those journeys or browser/html features at the selectors <code>#zephr-login-wall-slot</code>, <code>#zephr-registration-wall-slot</code>, and <code>#zephr-protected-wall-slot</code>.</li>
-          <li>Do not build the forms into this app; keep the forms and wall behavior inside Zephr so the front end stays CMS-agnostic.</li>
+          <li>If you are using a third-party CDN, proxy all <code>/blaize*</code> and <code>/zephr*</code> requests on the same origin.</li>
+          <li>Set <code>ZEPHR_BROWSER_SDK_URL</code> and <code>ZEPHR_PUBLIC_BASE_URL</code> if you want the page to interrogate the Zephr browser runtime.</li>
+          <li>If your wall relies on an explicit anonymous session first, set <code>ZEPHR_CREATE_ANON_SESSION=true</code>.</li>
         </ol>
       </article>
 
       <article class="card stack">
-        <h2>5. Wire the Zephr tenant integration</h2>
+        <h2>5. End-to-end test</h2>
         <ol>
-          <li>Decide whether your Zephr tenant will be updated through the Admin API, server-side SDK, or another approved integration surface.</li>
-          <li>Implement the TODO methods in <code>src/lib/zephr/client.ts</code> for <code>findUserByExternalId</code>, <code>findUserByEmail</code>, <code>createUser</code>, <code>updateUser</code>, <code>createAuthenticatedSession</code>, and <code>destroyAuthenticatedSession</code>.</li>
-          <li>Keep the current mapping model: NameID to <code>externalId</code>, email to <code>email</code>, givenName to <code>firstName</code>, surname to <code>lastName</code>, company/org to <code>company</code>, role/group to <code>role</code> or <code>groups</code>, and account id to <code>b2bAccountId</code>.</li>
-          <li>Only update safe profile fields during upsert. The mock implementation already models that pattern.</li>
-          <li>Once the tenant API calls are ready, change <code>ZEPHR_MODE=real</code>.</li>
-        </ol>
-      </article>
-
-      <article class="card stack">
-        <h2>6. Test login, logout, and protected-page access</h2>
-        <ol>
-          <li>Anonymous state: load <code>/</code> and <code>/protected</code>, verify the server session is anonymous and the wall slots render.</li>
-          <li>Login state: use <code>/auth/saml/login</code>. After ACS, confirm <code>/me</code> shows <code>isAuthenticated: true</code>, a mapped user, a Zephr upsert outcome, and a Zephr session object.</li>
-          <li>Browser SDK state: if the Zephr browser SDK is configured, verify the account/profile panels stop returning errors.</li>
-          <li>Protected page: revisit <code>/protected</code> and confirm it renders the signed-in content panel.</li>
-          <li>Logout: submit the <code>/auth/logout</code> form and verify both the app session and <code>blaize_session</code> cookie are cleared locally.</li>
-        </ol>
-      </article>
-
-      <article class="card stack">
-        <h2>7. Switch from mock mode to real mode cleanly</h2>
-        <ol>
-          <li>First switch <code>SAML_MODE</code> from <code>mock</code> to <code>real</code> so ACS validation becomes real.</li>
-          <li>Then switch <code>ZEPHR_MODE</code> from <code>mock</code> to <code>real</code> only after you have implemented the real tenant methods.</li>
-          <li>Keep the wall slots and the front-end page structure unchanged; the whole point of the POC is that the Zephr-managed experience stays in Zephr while the bridge logic stays in the app.</li>
+          <li>Open a demo article anonymously and confirm the Zephr wall appears.</li>
+          <li>Trigger SSO from the wall or via <code>/auth/saml/login?returnTo=/articles/inside-the-saml-zephr-longform-demo</code>.</li>
+          <li>Let the IdP authenticate the user.</li>
+          <li>After ACS, confirm <code>/me</code> shows <code>isAuthenticated: true</code> only when the matching Zephr user has an active grant.</li>
+          <li>If the user exists but lacks a grant, confirm they are sent to the alternate access page instead of silently failing.</li>
         </ol>
       </article>
     </section>`;
@@ -428,7 +383,11 @@ export function renderSetupGuidePage(config: AppConfig) {
   return renderDocument({
     title: 'Setup guide',
     body,
-    appState: { mode: { saml: config.saml.mode, zephr: config.zephr.mode } },
+    appState: {
+      requiredGrantIds: config.zephr.requiredGrantIds,
+      requiredProductIds: config.zephr.requiredProductIds,
+      foreignKeyName: config.zephr.foreignKeyName
+    },
     zephrBrowserSdkUrl: config.zephr.browserSdkUrl,
     zephrPublicBaseUrl: config.zephr.publicBaseUrl
   });

@@ -1,106 +1,25 @@
 # Zephr SAML POC
 
-A Node.js + TypeScript + Express proof of concept that demonstrates a custom SAML bridge in front of Zephr IDM.
+A Node.js + TypeScript + Express proof of concept that matches the enterprise flow more closely:
 
-This repo models the identity pattern you described:
+- a Zephr-managed wall or modal on the website triggers sign-in
+- the user is sent to an external SAML identity provider
+- after the SAML ACS callback, the backend looks up the user in Zephr
+- the backend checks whether that Zephr user has an active grant
+- only then does the site unlock protected content
 
-- An external SAML IdP performs primary authentication.
-- Custom bridge code handles SAML login initiation, ACS validation, attribute extraction, and user mapping.
-- Zephr remains the downstream identity and entitlement layer.
-- The front end stays CMS-agnostic and is intended to load the Zephr browser/CDN JavaScript layer plus Zephr-managed walls.
-- Registration and login walls are configured in Zephr, not hard-coded in this app.
+This keeps the responsibilities clean:
 
-## What this app demonstrates
-
-- `GET /auth/saml/login` to initiate SAML login
-- `POST /auth/saml/acs` to receive and validate the SAML response
-- JIT provisioning into Zephr through a dedicated Zephr client abstraction
-- Zephr session creation and local cookie mirroring after successful SAML login
-- Local logout through `POST /auth/logout`
-- Demo pages for anonymous state, signed-in state, mapped user attributes, CDN/browser SDK state, and Zephr wall targets
-- Demo article pages with teaser content and an article wall target
-- A built-in local setup guide at `GET /setup-guide`
-- Mock-first execution so the POC is runnable without a real IdP or Zephr tenant
-
-## Folder structure
-
-```text
-zephr-saml-poc/
-├── .env.example
-├── package.json
-├── README.md
-├── tsconfig.json
-├── src/
-│   ├── app.ts
-│   ├── config.ts
-│   ├── server.ts
-│   ├── middleware/
-│   │   └── errorHandler.ts
-│   ├── routes/
-│   │   ├── auth.ts
-│   │   └── index.ts
-│   ├── views/
-│   │   ├── layout.ts
-│   │   └── pages.ts
-│   ├── lib/
-│   │   ├── auth/
-│   │   │   ├── bridge.ts
-│   │   │   └── relayState.ts
-│   │   ├── mappers/
-│   │   │   └── userMapper.ts
-│   │   ├── saml/
-│   │   │   ├── service.ts
-│   │   │   └── types.ts
-│   │   └── zephr/
-│   │       ├── client.ts
-│   │       ├── sessions.ts
-│   │       ├── types.ts
-│   │       └── users.ts
-│   └── types/
-│       └── express.d.ts
-└── tests/
-    ├── helpers.ts
-    ├── mockAuthFlow.test.ts
-    ├── relayState.test.ts
-    ├── userMapper.test.ts
-    └── zephrMockService.test.ts
-```
-
-## Identity flow
-
-```text
-Browser
-  |
-  | 1. GET /auth/saml/login
-  v
-Custom Express bridge ------------------------------+
-  |                                                  |
-  | 2. Redirect AuthnRequest to external SAML IdP    |
-  v                                                  |
-External SAML IdP                                    |
-  |                                                  |
-  | 3. POST SAMLResponse to /auth/saml/acs           |
-  v                                                  |
-Custom Express bridge                                |
-  | 4. Validate signature, audience, issuer,         |
-  |    ACS destination, time conditions, RelayState  |
-  | 5. Map SAML attributes to Zephr user model       |
-  | 6. Upsert Zephr user                             |
-  | 7. Create Zephr-authenticated session            |
-  | 8. Persist local app session + mirror cookie     |
-  v                                                  |
-Zephr IDM / Public APIs <----------------------------+
-  |
-  | 9. Front end uses Zephr JS + Zephr-configured walls
-  v
-CMS-agnostic site pages
-```
+- **IdP**: authentication source of truth
+- **Zephr**: downstream user and grant source of truth
+- **App**: SAML bridge, Zephr lookup, and article unlock decision
 
 ## Routes
 
 - `GET /health`
 - `GET /auth/saml/login`
 - `POST /auth/saml/acs`
+- `GET /auth/access-denied`
 - `POST /auth/logout`
 - `GET /me`
 - `GET /`
@@ -109,265 +28,164 @@ CMS-agnostic site pages
 - `GET /articles/:slug`
 - `GET /setup-guide`
 
-## Local run
+## Project structure
 
-### 1. Create environment
+```text
+src/
+  app.ts
+  server.ts
+  config.ts
+  routes/
+    auth.ts
+    index.ts
+  lib/
+    auth/
+      bridge.ts
+      relayState.ts
+      samlIdpHints.ts
+    content/
+      articles.ts
+    mappers/
+      userMapper.ts
+    saml/
+      service.ts
+      types.ts
+    zephr/
+      client.ts
+      sessions.ts
+      types.ts
+      users.ts
+  views/
+    layout.ts
+    pages.ts
+  middleware/
+    errorHandler.ts
+tests/
+  helpers.ts
+  relayState.test.ts
+  samlAccessDecision.test.ts
+  samlIdpHints.test.ts
+  userMapper.test.ts
+  zephrGrantAccess.test.ts
+```
+
+## Identity flow
+
+```text
+Anonymous visitor
+  -> Zephr wall / modal on article page
+  -> clicks "Sign in with SSO"
+  -> /auth/saml/login
+  -> external SAML IdP
+  -> /auth/saml/acs
+  -> map SAML subject + email
+  -> look up Zephr user by foreign key, then by email
+  -> list active Zephr grants
+  -> if grant matches: unlock content
+  -> else: send to alternate access page
+```
+
+## Run locally
+
+1. Copy envs:
 
 ```bash
 cp .env.example .env
 ```
 
-### 2. Install dependencies
+2. Fill in the real SAML and Zephr values.
+
+3. Install and start:
 
 ```bash
 npm install
-```
-
-### 3. Run in mock mode first
-
-Leave these defaults in `.env`:
-
-```env
-SAML_MODE=mock
-ZEPHR_MODE=mock
-```
-
-Then start the app:
-
-```bash
 npm run dev
 ```
 
-Open `http://localhost:3000` and click `Start SAML login`.
+4. Open:
 
-In mock mode the app will:
-
-- synthesize a SAML profile
-- map the user
-- create or update a mock Zephr user
-- create a mock `blaize_session`
-- persist the local Express session
-
-You can also open the article demo at `http://localhost:3000/articles` and test a more realistic wall flow on:
-
+- `http://localhost:3000/`
+- `http://localhost:3000/articles`
 - `http://localhost:3000/articles/inside-the-saml-zephr-longform-demo`
-- `http://localhost:3000/articles/saml-zephr-bridge-explainer`
 
-## Mock mode vs real mode
-
-### Fully working now
-
-- Mock SAML login through `GET /auth/saml/login`
-- RelayState normalization and token storage
-- JIT user mapping and upsert logic
-- Mock Zephr user store
-- Mock Zephr session creation and destruction
-- Home page, protected page, and setup guide
-- Demo article index and article detail pages with teaser-vs-unlocked behavior
-- Unit tests for the core logic and a practical mock auth route test
-
-### Mocked intentionally
-
-- Real Zephr tenant user lookup and CRUD
-- Real Zephr session creation
-- Real Zephr session destruction
-- Real Zephr browser SDK asset delivery
-
-### Ready for real wiring
-
-- Real SAML validation path through `@node-saml/passport-saml`
-- Clear Zephr integration seam in `src/lib/zephr/client.ts`
-- Wall target placeholders that can be bound from Zephr admin without changing the page structure
-- Optional browser-side anonymous session bootstrap for CDN-style Zephr delivery
-
-## SAML configuration notes
-
-This repo uses `@node-saml/passport-saml` for the real SAML path.
-
-Security-sensitive behavior included in the configuration:
-
-- response signature validation
-- `InResponseTo` validation
-- audience validation
-- issuer validation when configured
-- timestamp and clock skew handling
-- ACS callback URL checking through the SAML strategy
-- RelayState tokenization to prevent open redirects
-- HTTP-only cookies for both app session and mirrored Zephr cookie
-
-## Example IdP SAML setups (Okta, Microsoft Entra, Google Workspace)
-
-The app is a SAML **service provider**. Your users sign in at an **enterprise** identity provider that speaks SAML 2.0.
-
-**Seamless “one click” behavior:** If the visitor already has an active session at the IdP (for example they are signed into Microsoft 365 or Google Workspace in the same browser), SP-initiated SAML often completes immediately: your app sends them to the IdP, the IdP posts a SAML assertion back to `/auth/saml/acs` without asking for a password. Keep `SAML_FORCE_AUTHN` unset or `false` unless you intentionally need the IdP to force re-authentication every time.
-
-**Consumer “Sign in with Google / Microsoft” on the public web** is usually **OpenID Connect**, not SAML. This POC’s `/auth/saml/login` path is for **SAML enterprise applications** (Entra enterprise app, Google Workspace SAML app, Okta SAML app, etc.).
-
-### Optional query parameters on `/auth/saml/login`
-
-When `SAML_MODE=real`, the app forwards these **allowlisted** query parameters on the IdP redirect URL (alongside the SAML request and internal `RelayState`): `login_hint`, `domain_hint`, `hd`. Many Microsoft Entra SAML integrations honor `login_hint` (email) to pick the correct tenant or account. Your IdP’s documentation is the source of truth for which parameters are supported.
-
-Example:
-
-```text
-/auth/saml/login?returnTo=/articles/my-slug&login_hint=reader@company.com
-```
-
-The home, article, and protected pages include a small **optional work email** field that submits `login_hint` for you.
-
-### Microsoft Entra ID (Azure AD)
-
-In the Microsoft Entra admin center, create an **Enterprise application** with **SAML-based sign-on**. Point the **Assertion Consumer Service (ACS)** URL to:
-
-- `https://<your-host>/auth/saml/acs`
-
-Use the same **Identifier (Entity ID)** and **Reply URL** conventions as in Okta below. Map SAML claims so this app receives at least **email** and a stable **Name ID** (see user mapping in this README). Put the IdP **SAML signing certificate** in `SAML_IDP_CERT`, the **Login URL** from the SAML metadata in `SAML_ENTRY_POINT`, and the Microsoft **Issuer** value in `SAML_IDP_ISSUER` when you need strict issuer matching.
-
-### Google Workspace
-
-In the Google Admin console, add a **SAML application** for this service provider. Use the same ACS URL and entity ID pattern. Release attributes for email, given name, and family name so they map into the attribute names this app expects (`email`, `givenName`, `surname`, etc.).
-
-### Example Okta SAML setup
-
-Use these values for a first pass:
-
-- Single sign-on URL: `http://localhost:3000/auth/saml/acs`
-- Audience URI / SP Entity ID: `zephr-saml-poc-local`
-- NameID format: persistent if possible
-- Application username: email is fine if persistent NameID is unavailable
-
-Recommended attribute statements:
-
-- `email`
-- `givenName`
-- `surname`
-- `company`
-- `role`
-- `groups`
-- `account_id`
-
-Then paste the resulting values into `.env`:
+## Required environment variables
 
 ```env
-SAML_MODE=real
-SAML_ENTRY_POINT=https://your-okta-domain/app/.../sso/saml
+APP_BASE_URL=http://localhost:3000
+SESSION_SECRET=change-me
+
+SAML_ENTRY_POINT=https://your-idp.example.com/app/your-app-id/sso/saml
 SAML_ISSUER=zephr-saml-poc-local
 SAML_CALLBACK_URL=http://localhost:3000/auth/saml/acs
 SAML_AUDIENCE=zephr-saml-poc-local
 SAML_IDP_ISSUER=http://www.okta.com/exkexample
-SAML_IDP_CERT="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+SAML_IDP_CERT="-----BEGIN CERTIFICATE-----\nYOUR_IDP_CERT\n-----END CERTIFICATE-----"
+
+ZEPHR_BASE_URL=https://tenant.api.zephr.com
+ZEPHR_ADMIN_ACCESS_KEY=replace-me
+ZEPHR_ADMIN_SECRET_KEY=replace-me
 ```
 
-If Okta requires signed AuthnRequests, also provide:
+Useful optional variables:
 
-- `SAML_PRIVATE_KEY`
-- `SAML_PUBLIC_CERT`
-
-## Zephr integration notes
-
-The app intentionally does **not** invent undocumented Zephr Admin API endpoints.
-
-Instead it keeps the tenant-specific work isolated in `src/lib/zephr/client.ts` behind these methods:
-
-- `findUserByExternalId`
-- `findUserByEmail`
-- `createUser`
-- `updateUser`
-- `createAuthenticatedSession`
-- `destroyAuthenticatedSession`
-
-That means the rest of the app is stable even while you decide how the real Zephr tenant should be called.
-
-### Front-end Zephr CDN / browser expectations
-
-The UI supports a Zephr browser runtime if you provide:
-
+- `ZEPHR_SITE_ID`
 - `ZEPHR_PUBLIC_BASE_URL`
 - `ZEPHR_BROWSER_SDK_URL`
-- `ZEPHR_CREATE_ANON_SESSION=true` if your Zephr delivery setup requires an explicit anonymous session before wall evaluation
+- `ZEPHR_CREATE_ANON_SESSION`
+- `ZEPHR_FOREIGN_KEY_NAME`
+- `ZEPHR_REQUIRED_GRANT_IDS`
+- `ZEPHR_REQUIRED_PRODUCT_IDS`
+- `ZEPHR_SESSION_COOKIE_DOMAIN`
 
-When the browser SDK is present the page will attempt:
+## Zephr assumptions
 
-- `BlaizeSDK.getAnonymousSession(...)` when configured
-- `BlaizeSDK.getAccount(...)`
-- `BlaizeSDK.getProfile(...)`
+This implementation now assumes:
 
-Wall target selectors exposed by the demo pages:
+- the user already exists in Zephr
+- the user already has a grant in Zephr
+- the app should **not** provision a new Zephr user during login
+- the app should **not** grant access purely because SAML succeeded
 
-- `#zephr-login-wall-slot`
-- `#zephr-registration-wall-slot`
-- `#zephr-protected-wall-slot`
-- `#zephr-article-wall-slot`
+The backend first tries to match by Zephr foreign key using `ZEPHR_FOREIGN_KEY_NAME`, then falls back to email.
 
-Use those selectors when you configure Zephr-managed login or registration walls in the Zephr admin UI.
+## Zephr API usage
 
-## User mapping model
+The app uses Zephr Admin API endpoints for:
 
-The mapping implemented in `src/lib/mappers/userMapper.ts` is:
+- `GET /v3/users?foreign_key.{key}=...`
+- `GET /v3/users?identifiers.email_address=...`
+- `GET /v3/users/{userId}/grants?active=true`
 
-- `NameID` or stable subject -> `externalId`
-- `email` -> `email`
-- `givenName` -> `firstName`
-- `surname` -> `lastName`
-- `company` / `org` -> `customFields.company`
-- `role` / `group` -> `customFields.role` and `customFields.groups`
-- `account_id` -> `customFields.b2bAccountId`
+The admin requests are HMAC-signed.
 
-Preference order:
+## What the app proves today
 
-1. stable `NameID`
-2. other stable subject claim
-3. email only as fallback
+- real SP-initiated SAML login flow
+- RelayState safety
+- IdP login-hint forwarding on an allowlist basis
+- Zephr user lookup by external subject or email
+- Zephr active-grant enforcement before content unlock
+- a site experience that still uses Zephr wall markers and browser/CDN targets
 
-## Example mock user data
+## Remaining tenant-specific seam
 
-```json
-{
-  "nameID": "00u123example",
-  "email": "alex.demo@example.com",
-  "givenName": "Alex",
-  "surname": "Demo",
-  "company": "Example Media Group",
-  "role": "marketing-admin",
-  "groups": ["marketing", "subscribers"],
-  "account_id": "acct-demo-123"
-}
-```
+The app treats the SAML + Zephr grant check as the authoritative access decision for the site.
 
-## Testing
+If your tenant also requires a separate Zephr browser-session mirroring step after ACS, wire that final cookie/session exchange into the Zephr integration layer. The current code calls this out explicitly rather than guessing a tenant contract.
 
-Once dependencies are installed:
+## Render
+
+A `render.yaml` is included. Set the real env vars in Render, then deploy.
+
+## Tests
 
 ```bash
+npm run build
 npm test
 ```
 
-Coverage targets included in this scaffold:
+## Risks / limitations
 
-- user mapping
-- RelayState validation logic
-- SAML IdP hint query allowlist (`login_hint`, `domain_hint`, `hd`)
-- mock Zephr service behavior
-- practical mock auth route happy path
-
-## Risks and limitations
-
-- Real Zephr CRUD and session endpoints are intentionally left as TODOs because this POC avoids fabricating undocumented tenant APIs.
-- Single Logout with the external IdP is not implemented. The current logout flow clears the local app session and the bridged Zephr session only.
-- The browser SDK URL is tenant-specific and must be supplied by you.
-- Real Zephr wall rendering depends on your tenant configuration and SDK asset availability.
-- The mock path proves the bridge behavior, but not the exact Zephr tenant contract.
-
-## What you need to supply next for a real tenant
-
-- real SAML IdP values for `.env`
-- the Zephr browser SDK asset URL
-- the Zephr live/public base URL
-- the exact approved Zephr tenant endpoints or SDK contract for user lookup, create, update, and session creation/destruction
-- the Zephr admin configuration for the login and registration walls targeting the provided selectors
-
-## Built-in setup guide
-
-A detailed local guide is also available in the running app at:
-
-- `GET /setup-guide`
+- Zephr browser-session mirroring can vary by tenant setup
+- grant matching rules may need to be narrowed with explicit grant IDs or product IDs
+- if your users are only matched by email today, adding the SAML subject as a Zephr foreign key will make the integration more durable over time

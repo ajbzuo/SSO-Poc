@@ -2,6 +2,14 @@ import { randomUUID } from 'node:crypto';
 
 const RELAY_STATE_TTL_MS = 10 * 60 * 1000;
 
+export interface RelayStateEntry {
+  returnTo: string;
+  popup: boolean;
+  createdAt: number;
+}
+
+export type RelayStateStore = Record<string, RelayStateEntry>;
+
 function isSafeRelativePath(candidate: string): boolean {
   if (!candidate.startsWith('/')) {
     return false;
@@ -23,12 +31,13 @@ export function normalizeReturnTo(candidate: unknown, fallback = '/'): string {
 }
 
 export function createRelayStateToken(
-  session: Record<string, { returnTo: string; createdAt: number }> | undefined,
-  returnTo: string
+  session: RelayStateStore | undefined,
+  returnTo: string,
+  popup = false
 ) {
   const token = randomUUID();
   const nextSession = session ?? {};
-  nextSession[token] = { returnTo: normalizeReturnTo(returnTo), createdAt: Date.now() };
+  nextSession[token] = { returnTo: normalizeReturnTo(returnTo), popup, createdAt: Date.now() };
 
   for (const [key, value] of Object.entries(nextSession)) {
     if (Date.now() - value.createdAt > RELAY_STATE_TTL_MS) {
@@ -40,24 +49,24 @@ export function createRelayStateToken(
 }
 
 export function consumeRelayStateToken(
-  session: Record<string, { returnTo: string; createdAt: number }> | undefined,
+  session: RelayStateStore | undefined,
   token: unknown,
   fallback = '/'
 ) {
   if (!session || typeof token !== 'string') {
-    return { returnTo: fallback, nextSession: session ?? {} };
+    return { returnTo: fallback, popup: false, nextSession: session ?? {} };
   }
 
   const payload = session[token];
   delete session[token];
 
   if (!payload) {
-    return { returnTo: fallback, nextSession: session };
+    return { returnTo: fallback, popup: false, nextSession: session };
   }
 
   if (Date.now() - payload.createdAt > RELAY_STATE_TTL_MS) {
-    return { returnTo: fallback, nextSession: session };
+    return { returnTo: fallback, popup: false, nextSession: session };
   }
 
-  return { returnTo: normalizeReturnTo(payload.returnTo, fallback), nextSession: session };
+  return { returnTo: normalizeReturnTo(payload.returnTo, fallback), popup: payload.popup, nextSession: session };
 }

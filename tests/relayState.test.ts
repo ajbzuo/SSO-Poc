@@ -9,8 +9,9 @@ test('normalizeReturnTo rejects external redirects', () => {
 });
 
 test('relay state token round-trips only safe relative paths', () => {
-  const { token, nextSession } = createRelayStateToken(undefined, '/protected?via=saml');
+  const { token, nextSession } = createRelayStateToken(undefined, '/protected?via=saml', true);
   const result = consumeRelayStateToken(nextSession, token, '/');
 
   assert.equal(result.returnTo, '/protected?via=saml');
+  assert.equal(result.popup, true);
 });
