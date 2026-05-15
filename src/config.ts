@@ -14,6 +14,18 @@ const booleanFromEnv = z
   .optional()
   .transform((value) => value === 'true');
 
+const emptyToUndefined = (value: unknown) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+};
+
+const optionalString = z.preprocess(emptyToUndefined, z.string().optional());
+const optionalUrl = z.preprocess(emptyToUndefined, z.string().url().optional());
+
 const csvFromEnv = z
   .string()
   .optional()
@@ -35,24 +47,24 @@ const baseSchema = z.object({
   SAML_ENTRY_POINT: z.string().url(),
   SAML_ISSUER: z.string().min(1),
   SAML_CALLBACK_URL: z.string().url(),
-  SAML_AUDIENCE: z.string().optional(),
-  SAML_IDP_ISSUER: z.string().optional(),
+  SAML_AUDIENCE: optionalString,
+  SAML_IDP_ISSUER: optionalString,
   SAML_IDP_CERT: z.string().min(1),
-  SAML_PRIVATE_KEY: z.string().optional(),
-  SAML_PUBLIC_CERT: z.string().optional(),
+  SAML_PRIVATE_KEY: optionalString,
+  SAML_PUBLIC_CERT: optionalString,
   SAML_FORCE_AUTHN: booleanFromEnv,
   SAML_ACCEPTED_CLOCK_SKEW_MS: z.coerce.number().int().default(5000),
   ZEPHR_BASE_URL: z.string().url(),
   ZEPHR_ADMIN_ACCESS_KEY: z.string().min(1),
   ZEPHR_ADMIN_SECRET_KEY: z.string().min(1),
-  ZEPHR_SITE_ID: z.string().optional(),
-  ZEPHR_PUBLIC_BASE_URL: z.string().url().optional(),
-  ZEPHR_BROWSER_SDK_URL: z.string().url().optional(),
+  ZEPHR_SITE_ID: optionalString,
+  ZEPHR_PUBLIC_BASE_URL: optionalUrl,
+  ZEPHR_BROWSER_SDK_URL: optionalUrl,
   ZEPHR_CREATE_ANON_SESSION: booleanFromEnv,
   ZEPHR_FOREIGN_KEY_NAME: z.string().default('SAML_SUBJECT'),
   ZEPHR_REQUIRED_GRANT_IDS: csvFromEnv,
   ZEPHR_REQUIRED_PRODUCT_IDS: csvFromEnv,
-  ZEPHR_SESSION_COOKIE_DOMAIN: z.string().optional(),
+  ZEPHR_SESSION_COOKIE_DOMAIN: optionalString,
   ZEPHR_LOGIN_WALL_LABEL: z.string().default('Login Wall'),
   ZEPHR_REGISTRATION_WALL_LABEL: z.string().default('Registration Wall'),
   ZEPHR_PROTECTED_WALL_LABEL: z.string().default('Protected Content Wall')
