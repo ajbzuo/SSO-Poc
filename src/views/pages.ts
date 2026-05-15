@@ -32,6 +32,27 @@ function logoutButton(auth?: SessionState) {
   return '<form method="post" action="/auth/logout"><button type="submit" class="button warn">Logout</button></form>';
 }
 
+/** Optional work email forwarded as `login_hint` to SAML IdPs that support it (e.g. Microsoft Entra). */
+function samlLoginHintForm(returnTo: string, formIdSuffix: string) {
+  const safeReturn = escapeHtml(returnTo);
+  const idSuffix = formIdSuffix.replace(/[^a-zA-Z0-9_-]/g, '-');
+  const fieldId = `login-hint-${idSuffix}`;
+  return `
+    <div class="card stack saml-hint-panel">
+      <h3 style="margin:0;font-size:1.05rem;font-family:'Avenir Next','Segoe UI',sans-serif;">SAML SSO with your email provider</h3>
+      <p class="meta">Use this with a <strong>SAML</strong> app in Microsoft Entra ID, Google Workspace, Okta, or another enterprise IdP. If you are already signed in there, the IdP often completes SSO in one step without typing your password again. Consumer &quot;Sign in with Google&quot; on the web is usually <strong>OpenID Connect</strong>, not SAML; your admin creates a SAML enterprise application instead.</p>
+      <form method="get" action="/auth/saml/login" class="stack saml-hint-form">
+        <input type="hidden" name="returnTo" value="${safeReturn}" />
+        <label for="${fieldId}" class="meta" style="font-weight:700;">Work email (optional)</label>
+        <input id="${fieldId}" name="login_hint" type="email" autocomplete="username" inputmode="email" placeholder="you@company.com" class="saml-hint-input" />
+        <div class="actions">
+          <button type="submit" class="button">Continue with SAML</button>
+        </div>
+      </form>
+      <p class="meta">Advanced: you can also append <code>domain_hint</code> or <code>hd</code> query parameters on <code>/auth/saml/login</code> when your IdP documents them.</p>
+    </div>`;
+}
+
 export function renderHomePage(config: AppConfig, auth?: SessionState) {
   const body = `
     <section class="hero">
@@ -47,6 +68,7 @@ export function renderHomePage(config: AppConfig, auth?: SessionState) {
         <a class="button secondary" href="/me">View /me JSON</a>
         ${logoutButton(auth)}
       </div>
+      ${samlLoginHintForm('/protected', 'home')}
     </section>
 
     <section class="grid two">
@@ -169,6 +191,7 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
         <a class="button secondary" href="/articles">More articles</a>
         ${logoutButton(auth)}
       </div>
+      ${samlLoginHintForm(`/articles/${article.slug}`, `article-${article.slug}`)}
     </section>
 
     <section class="grid two">
@@ -243,6 +266,7 @@ export function renderProtectedPage(config: AppConfig, auth?: SessionState) {
         <a class="button" href="/auth/saml/login?returnTo=/protected">${auth?.isAuthenticated ? 'Re-run SAML login' : 'Authenticate now'}</a>
         <a class="button secondary" href="/">Back home</a>
       </div>
+      ${samlLoginHintForm('/protected', 'protected')}
     </section>
 
     <section class="grid two">
@@ -313,7 +337,9 @@ export function renderSetupGuidePage(config: AppConfig) {
       </article>
 
       <article class="card stack">
-        <h2>2. Configure a test SAML provider in Okta</h2>
+        <h2>2. Configure SAML in your IdP (Okta, Microsoft Entra, Google Workspace)</h2>
+        <p class="meta">All of these are SAML 2.0 enterprise flows. Consumer &quot;Sign in with Google&quot; on arbitrary websites is usually OpenID Connect, not SAML; your directory admin creates a SAML enterprise app instead.</p>
+        <h3>Okta</h3>
         <ol>
           <li>Create a new SAML 2.0 application in Okta.</li>
           <li>Set the Single sign-on URL to <code>${escapeHtml(config.appBaseUrl)}/auth/saml/acs</code>.</li>
@@ -322,6 +348,22 @@ export function renderSetupGuidePage(config: AppConfig) {
           <li>Add attribute statements for <code>email</code>, <code>givenName</code>, <code>surname</code>, <code>company</code>, <code>role</code>, optional <code>groups</code>, and optional <code>account_id</code>.</li>
           <li>Download or copy the IdP signing certificate in PEM form and paste it into <code>SAML_IDP_CERT</code>.</li>
           <li>Copy the Okta SSO URL into <code>SAML_ENTRY_POINT</code> and the Okta issuer into <code>SAML_IDP_ISSUER</code>.</li>
+        </ol>
+        <h3>Microsoft Entra ID</h3>
+        <ol>
+          <li>Create an enterprise application with SAML-based sign-on.</li>
+          <li>Set the Reply URL (ACS) to <code>${escapeHtml(config.appBaseUrl)}/auth/saml/acs</code> and the Identifier (Entity ID) to <code>${escapeHtml(config.saml.issuer)}</code>.</li>
+          <li>Map claims so the SAML assertion includes <code>email</code> (or a claim this app maps as email) and a stable Name ID.</li>
+          <li>Paste the base64 SAML signing certificate into <code>SAML_IDP_CERT</code> as a PEM block.</li>
+          <li>Use the Microsoft login URL from the SAML configuration as <code>SAML_ENTRY_POINT</code> and set <code>SAML_IDP_ISSUER</code> to the Entra issuer if you rely on issuer validation.</li>
+          <li>For faster account selection, use the optional work email field on the site or call <code>/auth/saml/login?login_hint=user@tenant.com</code>; Entra often honors <code>login_hint</code> on SAML SP-initiated requests.</li>
+        </ol>
+        <h3>Google Workspace</h3>
+        <ol>
+          <li>In Google Admin, add a SAML app for this SP.</li>
+          <li>Use the same ACS path and entity ID pattern as above.</li>
+          <li>Expose primary email and name fields with attribute names that match this app’s mapper (for example <code>email</code>, <code>givenName</code>, <code>surname</code>).</li>
+          <li>Place the Google IdP certificate and SSO URL into <code>SAML_IDP_CERT</code> and <code>SAML_ENTRY_POINT</code>.</li>
         </ol>
       </article>
 
@@ -332,6 +374,8 @@ export function renderSetupGuidePage(config: AppConfig) {
           <li>Confirm <code>SAML_ENTRY_POINT</code>, <code>SAML_ISSUER</code>, <code>SAML_CALLBACK_URL</code>, and <code>SAML_IDP_CERT</code> are set.</li>
           <li>If your IdP requires signed AuthnRequests, add <code>SAML_PRIVATE_KEY</code> and <code>SAML_PUBLIC_CERT</code>.</li>
           <li>Keep <code>SAML_ACCEPTED_CLOCK_SKEW_MS</code> small and use the default audience/issuer pairing unless your IdP needs a different audience string.</li>
+          <li>Leave <code>SAML_FORCE_AUTHN=false</code> unless you need the IdP to ignore existing sessions; seamless SSO depends on the IdP reusing an active session.</li>
+          <li>Optional: append <code>login_hint</code>, <code>domain_hint</code>, or <code>hd</code> to <code>/auth/saml/login</code> when your IdP documents support; the app forwards only those allowlisted parameters.</li>
           <li>Restart the app and trigger <code>/auth/saml/login</code>. The ACS route will validate signature, audience, issuer, response timing, ACS destination, and <code>InResponseTo</code> through the SAML library configuration.</li>
         </ol>
       </article>

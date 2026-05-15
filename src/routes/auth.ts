@@ -3,6 +3,7 @@ import { Router } from 'express';
 import passport from 'passport';
 import type { AppConfig } from '../config.js';
 import { clearAuthState, completeSamlLogin } from '../lib/auth/bridge.js';
+import { extractForwardedIdpLoginParams } from '../lib/auth/samlIdpHints.js';
 import { consumeRelayStateToken, createRelayStateToken, normalizeReturnTo } from '../lib/auth/relayState.js';
 import { getMockSamlProfile } from '../lib/saml/service.js';
 import type { RawSamlProfile } from '../lib/saml/types.js';
@@ -60,9 +61,12 @@ export function createAuthRouter(config: AppConfig, zephrClient: ZephrClient) {
     const { token, nextSession } = createRelayStateToken(req.session.relayState, returnTo);
     req.session.relayState = nextSession;
 
+    const idpHints = extractForwardedIdpLoginParams(req.query);
+    const additionalParams: Record<string, string> = { RelayState: token, ...idpHints };
+
     passport.authenticate('saml', {
       session: false,
-      additionalParams: { RelayState: token }
+      additionalParams
     } as any)(req, res, next);
   });
 

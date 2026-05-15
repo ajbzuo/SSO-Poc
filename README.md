@@ -195,7 +195,39 @@ Security-sensitive behavior included in the configuration:
 - RelayState tokenization to prevent open redirects
 - HTTP-only cookies for both app session and mirrored Zephr cookie
 
-## Example Okta SAML setup
+## Example IdP SAML setups (Okta, Microsoft Entra, Google Workspace)
+
+The app is a SAML **service provider**. Your users sign in at an **enterprise** identity provider that speaks SAML 2.0.
+
+**Seamless “one click” behavior:** If the visitor already has an active session at the IdP (for example they are signed into Microsoft 365 or Google Workspace in the same browser), SP-initiated SAML often completes immediately: your app sends them to the IdP, the IdP posts a SAML assertion back to `/auth/saml/acs` without asking for a password. Keep `SAML_FORCE_AUTHN` unset or `false` unless you intentionally need the IdP to force re-authentication every time.
+
+**Consumer “Sign in with Google / Microsoft” on the public web** is usually **OpenID Connect**, not SAML. This POC’s `/auth/saml/login` path is for **SAML enterprise applications** (Entra enterprise app, Google Workspace SAML app, Okta SAML app, etc.).
+
+### Optional query parameters on `/auth/saml/login`
+
+When `SAML_MODE=real`, the app forwards these **allowlisted** query parameters on the IdP redirect URL (alongside the SAML request and internal `RelayState`): `login_hint`, `domain_hint`, `hd`. Many Microsoft Entra SAML integrations honor `login_hint` (email) to pick the correct tenant or account. Your IdP’s documentation is the source of truth for which parameters are supported.
+
+Example:
+
+```text
+/auth/saml/login?returnTo=/articles/my-slug&login_hint=reader@company.com
+```
+
+The home, article, and protected pages include a small **optional work email** field that submits `login_hint` for you.
+
+### Microsoft Entra ID (Azure AD)
+
+In the Microsoft Entra admin center, create an **Enterprise application** with **SAML-based sign-on**. Point the **Assertion Consumer Service (ACS)** URL to:
+
+- `https://<your-host>/auth/saml/acs`
+
+Use the same **Identifier (Entity ID)** and **Reply URL** conventions as in Okta below. Map SAML claims so this app receives at least **email** and a stable **Name ID** (see user mapping in this README). Put the IdP **SAML signing certificate** in `SAML_IDP_CERT`, the **Login URL** from the SAML metadata in `SAML_ENTRY_POINT`, and the Microsoft **Issuer** value in `SAML_IDP_ISSUER` when you need strict issuer matching.
+
+### Google Workspace
+
+In the Google Admin console, add a **SAML application** for this service provider. Use the same ACS URL and entity ID pattern. Release attributes for email, given name, and family name so they map into the attribute names this app expects (`email`, `givenName`, `surname`, etc.).
+
+### Example Okta SAML setup
 
 Use these values for a first pass:
 
@@ -314,6 +346,7 @@ Coverage targets included in this scaffold:
 
 - user mapping
 - RelayState validation logic
+- SAML IdP hint query allowlist (`login_hint`, `domain_hint`, `hd`)
 - mock Zephr service behavior
 - practical mock auth route happy path
 
