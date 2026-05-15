@@ -1,7 +1,13 @@
+import { existsSync } from 'node:fs';
 import { config as loadEnv } from 'dotenv';
 import { z } from 'zod';
 
 loadEnv();
+
+const renderSecretEnvPath = '/etc/secrets/sso.env';
+if (existsSync(renderSecretEnvPath)) {
+  loadEnv({ path: renderSecretEnvPath });
+}
 
 const booleanFromEnv = z
   .string()
