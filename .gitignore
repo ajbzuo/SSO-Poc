@@ -3,6 +3,8 @@ dist/
 .env
 .env.*
 !.env.example
+*.env
+sso.env
 .DS_Store
 coverage/
 *.log
