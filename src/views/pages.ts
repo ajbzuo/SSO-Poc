@@ -50,6 +50,21 @@ function renderStoryCards(articles: DemoArticle[]) {
     .join('');
 }
 
+function renderStoryLinks(articles: DemoArticle[]) {
+  return articles
+    .map(
+      (article) => `
+        <article class="news-card">
+          <div class="story-kicker">${escapeHtml(article.category)}</div>
+          <h3 style="font-family:var(--serif);font-size:1.28rem;letter-spacing:-0.01em;text-transform:none;">${escapeHtml(article.title)}</h3>
+          <p class="story-meta">${escapeHtml(article.author)} · ${escapeHtml(article.readTime)}</p>
+          <a class="muted-link" href="/articles/${encodeURIComponent(article.slug)}">Read article</a>
+        </article>
+      `
+    )
+    .join('');
+}
+
 export function renderHomePage(config: AppConfig, auth?: SessionState) {
   const lead = demoArticles[0] ?? {
     slug: 'articles',
@@ -61,7 +76,10 @@ export function renderHomePage(config: AppConfig, auth?: SessionState) {
     teaser: [],
     premium: []
   };
-  const secondary = demoArticles.slice(1, 4);
+  const frontPackage = demoArticles.slice(0, 5);
+  const secondary = frontPackage.slice(1);
+  const remaining = demoArticles.slice(5);
+  const columns = [remaining.filter((_, index) => index % 3 === 0), remaining.filter((_, index) => index % 3 === 1), remaining.filter((_, index) => index % 3 === 2)];
 
   const body = `
     <section class="hero">
@@ -111,8 +129,8 @@ export function renderHomePage(config: AppConfig, auth?: SessionState) {
           <section class="card stack">
             <div class="section-heading">
               <div>
-                <div class="story-kicker">On the desk</div>
-                <h3 style="margin-top:6px;">Secondary reads</h3>
+                <div class="story-kicker">Top coverage</div>
+                <h3 style="margin-top:6px;">Around the lead story</h3>
               </div>
             </div>
             <div class="story-list">
@@ -134,27 +152,29 @@ export function renderHomePage(config: AppConfig, auth?: SessionState) {
       </div>
     </section>
 
-    <section class="grid two">
-      <section class="card stack">
+    <section class="grid">
+      <section class="card stack subtle">
         <div class="section-heading">
           <div>
-            <div class="story-kicker">Subscriber report</div>
-            <h2>Why premium editorial structure matters</h2>
+            <div class="story-kicker">More from Ledger Chronicle</div>
+            <h2>The wider briefing book</h2>
           </div>
-          <p>A paywall feels much more believable inside a real reading experience.</p>
+          <p>The front page can spotlight a handful of lead pieces while the rest of the publication flows as linked reporting beneath it.</p>
         </div>
-        <p>The front page now behaves like a publication instead of a product sandbox. Long reads can open publicly, move into premium analysis, and rely on Zephr for gating without the page needing to explain its own mechanics to the reader.</p>
-        <p>That keeps the story, the publication brand, and the paywall moment all in the same editorial language. It also gives you cleaner space to test different Zephr journeys later without redesigning the entire site again.</p>
-      </section>
-      <section class="card stack">
-        <div class="section-heading">
-          <div>
-            <div class="story-kicker">For editorial demos</div>
-            <h2>Designed for premium journeys</h2>
-          </div>
-          <p>The public pages now stay focused on content first.</p>
+        <div class="grid three" style="margin-top:0;">
+          ${columns
+            .map(
+              (column, index) => `
+                <div class="stack">
+                  <div class="story-kicker">${index === 0 ? 'Markets' : index === 1 ? 'Institutions' : 'Capital'}</div>
+                  <div class="story-list">
+                    ${renderStoryLinks(column)}
+                  </div>
+                </div>
+              `
+            )
+            .join('')}
         </div>
-        <p>Each article template carries a consistent premium section, so you can add Zephr walls, registration journeys, or subscriber experiences without surfacing internal implementation notes on the page itself.</p>
       </section>
     </section>`;
 
@@ -229,13 +249,6 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
           </article>
 
           <article class="card article-copy">
-            <div class="section-heading">
-              <div>
-                <div class="story-kicker">Premium edition</div>
-                <h2>${isAuthenticated ? 'Full article' : 'Continue reading'}</h2>
-              </div>
-              <p>${isAuthenticated ? 'Subscriber access is active for this session.' : 'This section can be unlocked through your subscription journey.'}</p>
-            </div>
             <!-- ZEPHR_FEATURE sso-regwall -->
             ${
               isAuthenticated
