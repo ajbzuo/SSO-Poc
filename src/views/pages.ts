@@ -248,8 +248,8 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
             ${teaserMarkup}
           </article>
 
+          <!-- ZEPHR_FEATURE sso-regwall -->
           <article class="card article-copy">
-            <!-- ZEPHR_FEATURE sso-regwall -->
             ${
               isAuthenticated
                 ? `
@@ -262,8 +262,8 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
                   </div>
                 `
             }
-            <!-- ZEPHR_FEATURE_END sso-regwall -->
           </article>
+          <!-- ZEPHR_FEATURE_END sso-regwall -->
         </div>
 
         <aside class="article-aside">
