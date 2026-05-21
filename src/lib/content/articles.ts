@@ -9,6 +9,27 @@ export interface DemoArticle {
   premium: string[];
 }
 
+function withLongformDepth(article: DemoArticle): DemoArticle {
+  const contextualTeaser = [
+    `What keeps this story relevant is that it does not sit in isolation from the rest of the market. ${article.category} conversations are now bleeding into board strategy, capital planning, client servicing and investor expectations all at once, which means decisions that once lived with a specialist desk are increasingly being debated at the centre of the institution.`,
+    `Executives also describe a cultural shift behind the numbers. Teams are spending more time pressure-testing assumptions before they become formal recommendations, and the bar for approving new activity has risen from “can this work in a good market?” to “does this still make sense if conditions remain awkward for longer than expected?”`
+  ];
+
+  const contextualPremium = [
+    `That broader institutional lens is changing who gets heard internally. Treasury, legal, risk and operations teams are all carrying more influence in conversations that might previously have been led almost entirely by deal sponsors or product specialists. The effect is not to slow every decision, but to force a clearer accounting of what could go wrong once the market narrative turns less forgiving.`,
+    `There is also a talent implication. Firms that want to compete in this environment need people who can move between technical detail and executive judgement without losing credibility in either room. Specialists still matter, but the premium is increasingly on people who can translate complexity into a decision framework that a board, credit committee or investment panel can actually use.`,
+    `Another reason these themes are persisting is that investors and clients have become more exacting about evidence. It is no longer enough to invoke diversification, resilience, strategic optionality or digital transformation in the abstract. Sophisticated buyers want those claims tied to observable behaviour: pricing discipline, process quality, reporting, recovery paths and the ability to absorb stress without improvising the entire operating model.`,
+    `That is why the current phase feels less like a temporary adjustment and more like a reset in expectations. Even if financing conditions or market sentiment improve, many of the disciplines being rebuilt now are unlikely to disappear. They are becoming part of how serious institutions explain prudence, defend returns and prove that they deserve trust in a market that has grown much less generous with the benefit of the doubt.`
+  ];
+
+  return {
+    ...article,
+    readTime: `${Math.max(10, Number.parseInt(article.readTime, 10) + 4)} min read`,
+    teaser: [...article.teaser, ...contextualTeaser],
+    premium: [...article.premium, ...contextualPremium]
+  };
+}
+
 export const demoArticles: DemoArticle[] = [
   {
     slug: 'private-credit-insurers-and-the-new-balance-sheet-trade',
@@ -431,7 +452,7 @@ export const demoArticles: DemoArticle[] = [
       'That means pricing discipline should remain central even if activity rises. Liquidity in private markets is becoming more normalised, but it is not becoming frictionless.'
     ]
   }
-];
+].map(withLongformDepth);
 
 export function findDemoArticle(slug: string) {
   return demoArticles.find((article) => article.slug === slug);
