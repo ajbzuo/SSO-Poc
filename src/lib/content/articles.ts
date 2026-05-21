@@ -11,64 +11,72 @@ export interface DemoArticle {
 
 export const demoArticles: DemoArticle[] = [
   {
-    slug: 'inside-the-saml-zephr-longform-demo',
-    title: 'Inside the SAML to Zephr bridge: a longform walkthrough of identity, registration walls, and downstream sessions',
-    dek: 'A feature-length demo article designed to feel like a premium publisher experience, with a public opening, a gated middle, and enough depth to test a realistic registration or login wall.',
-    category: 'Longform',
-    author: 'Platform Features Editor',
-    readTime: '12 min read',
+    slug: 'private-credit-insurers-and-the-new-balance-sheet-trade',
+    title: 'Private credit, insurers, and the new balance-sheet trade reshaping institutional portfolios',
+    dek: 'A longform look at why insurers, pension allocators and alternative lenders are building a more durable relationship around duration, yield and control.',
+    category: 'Capital Markets',
+    author: 'Mara Ellison',
+    readTime: '11 min read',
     teaser: [
-      'The hardest part of explaining a hybrid identity architecture is that most demos are either too abstract or too technical. They show a login button, a JSON payload, and a success message, but they do not show how the experience feels on a real content page where the business actually cares about conversion.',
-      'That gap matters. In media, B2B publishing, membership products, and corporate information portals, identity is not just about getting a green checkmark from an authentication library. It is about whether the person on the other side of the screen can move from anonymous browsing into a recognized, entitled relationship without friction or confusion.',
-      'This longform article exists to make that visible. It starts like a public-facing feature story, gives an anonymous visitor enough value to understand what is behind the gate, and then creates a clean moment where a Zephr-managed wall can take over while the custom bridge does the trust-heavy work in the background.',
-      'In a traditional consumer login flow, a site might own everything: the form, the password check, the session, and the access rules. But many organizations do not operate that way. They already have an enterprise identity provider for employees, partners, group customers, or managed accounts. That upstream identity provider is the source of truth for authentication, yet the site still wants Zephr to remain the source of truth for site-side access, walls, and entitlements.',
-      'That is where the bridge pattern becomes useful. Instead of forcing Zephr to be the first system that authenticates the user, the bridge accepts a validated SAML response from the upstream identity provider, translates it into a Zephr-shaped user record, and then establishes the downstream session that the site and Zephr JS can understand.'
+      'For most of the last decade, institutional investors could describe their fixed-income problem in a single phrase: there was never enough spread to satisfy the liability side of the house. Even when public credit markets were functioning smoothly, insurers and pension plans struggled to find assets that offered enough incremental return without forcing them into an uncomfortable level of liquidity risk or manager complexity.',
+      'That equation has changed. Higher policy rates have improved the all-in return profile of many conventional assets, but they have also widened the conversation about what belongs on long-dated balance sheets. Private credit is no longer being discussed purely as a tactical yield enhancer. It is being assessed as a structural allocation that can sit between public corporates, structured credit and bespoke financing relationships.',
+      'For insurers, the attraction is not only income. It is the ability to participate in deals that are underwritten with tighter information loops, stronger lender protections and more control over documentation than broadly syndicated markets usually allow. For sponsors and borrowers, the attraction is speed, certainty and a financing partner willing to tailor amortisation, covenant packages and reporting obligations around a real operating plan rather than a standard market template.'
     ],
     premium: [
-      'Once the bridge receives the assertion consumer service callback, it does not simply trust a bag of attributes and move on. It validates the SAML response according to the configured issuer, audience, timing rules, ACS destination, and response correlation settings. That validation step is what turns the upstream login ceremony into something the downstream site can rely on.',
-      'After validation, the bridge extracts a stable subject. In this proof of concept, the preferred source is the SAML NameID or another immutable subject claim. Email is still captured and used, but it is treated as a weaker identifier because email can change over time while an immutable subject is meant to anchor the identity relationship.',
-      'That distinction matters for just-in-time provisioning. If the same person appears later with an updated email address but the same immutable external subject, the bridge can still recognize them as the same downstream Zephr user. The result is a safer and more durable mapping model for account continuity, auditability, and entitlement lookups.',
-      'The next step is the downstream Zephr decision. This implementation first looks for a matching Zephr user by immutable external subject and then falls back to email only when needed. That keeps the identity mapping stable while still giving the site a practical route to match pre-existing users who may not yet carry the subject as a foreign key.',
-      'That separation is deliberate. One of the biggest problems in integration prototypes is that they bake uncertain vendor assumptions directly into route handlers or UI pages. This project keeps the SAML validation, the Zephr lookup, and the final access decision in distinct layers so the user journey can stay stable even while the tenant-specific Zephr contract evolves.',
-      'Grant verification is the next piece that makes the experience feel coherent. If the external SAML login succeeds but the matching Zephr account has no active grant, the site should not pretend the user is entitled. It should instead send the user into the alternate access or onboarding path that the business expects.',
-      'That is why the bridge does not stop at “the identity provider says yes.” It checks whether the user already exists in Zephr and whether one of the relevant grants is active. Only then does the reading experience unlock on the site.',
-      'On the front end, the site remains intentionally CMS-agnostic. There is no assumption that you are using WordPress, Brightspot, or another specific publishing stack. The pages are simple server-rendered HTML, and the Zephr-specific behavior is modeled as stable target containers where Zephr-managed walls or browser features can be attached later through configuration rather than hard-coded form markup.',
-      'That is why the article page is structured with a clear public opening and a dedicated gated container. The teaser gives enough narrative context to resemble a true editorial landing experience. The premium section then becomes the point where Zephr can intervene, either with a registration wall, a login wall, or another configured experience that matches your desired journey.',
-      'In a real rollout, you would likely go further. You might inspect entitlements from the browser SDK, use a richer article taxonomy, attach different walls to different content types, or distinguish between known-but-not-entitled users and fully anonymous users. But the underlying principle would remain the same: the upstream IdP authenticates, the bridge translates and synchronizes, and Zephr continues to own the audience and access layer for the site.',
-      'That is the reason a longform article is a better test bed than a standalone protected route. It lets you evaluate more than just security plumbing. You can see whether the wall appears in the right place, whether the visitor understands what they are unlocking, whether the return path lands them back on the original article, and whether the downstream session is visible to the rest of the site.',
-      'If those pieces work together, then the proof of concept has done its job. It has shown not only that a SAML response can be validated, but that the validation can power a believable reading experience where Zephr remains the downstream identity and entitlement layer without owning the primary authentication step.'
+      'What makes the current moment particularly interesting is that insurers are not approaching private credit as tourists. Many are building or deepening origination partnerships with specialist asset managers, and some are reshaping internal investment committees so private assets are evaluated within the same balance-sheet framework as public income books. The goal is not to chase novelty. It is to find predictable contractual cash flow with a margin for underwriting discipline.',
+      'That changes the conversation with managers. A manager pitching to an insurance investor now needs to explain more than raw gross returns. They need to show how a portfolio behaves under stress, where recoveries are likely to come from, how documentation has evolved across vintages, and whether the underwriting team has enough sector depth to identify deteriorating credits before they become restructuring exercises. The best fundraises increasingly feel less like broad asset-class sales and more like detailed operating reviews.',
+      'There is also a governance dimension. Insurance investors tend to be more sensitive than many endowments or family offices to the operational plumbing behind a private credit strategy. Valuation methodology, watchlist escalation, servicing capacity and workout resources all matter. In a lower-default environment those questions can seem procedural. In a more uncertain refinancing cycle they become central to whether the headline spread actually compensates for the embedded complexity in the asset.',
+      'Borrowers, meanwhile, are discovering that private capital is not simply a substitute for syndicated finance. The most successful relationships are often the ones where the lender understands the sponsor timeline, the regulatory perimeter of the business and the likely exit routes before documents are even marked up. That can support more resilient capital structures, but it also means the lender has a much sharper view of where the real business risks sit. The negotiation is more bespoke, and therefore more exacting.',
+      'The strategic question for allocators is whether this remains a cyclical window or becomes a permanent architecture shift. The case for permanence is strengthening. If insurers can consistently pair private credit with robust underwriting standards, transparent servicing and liability-aware portfolio construction, the asset class starts to look less like an opportunistic sleeve and more like a durable balance-sheet instrument. That would reshape competition for deals, fee economics for managers and the role of banks in the financing stack for years to come.'
     ]
   },
   {
-    slug: 'saml-zephr-bridge-explainer',
-    title: 'Why a SAML-to-Zephr bridge is useful for B2B media subscriptions',
-    dek: 'A proof-of-concept editorial page that shows how upstream enterprise login can still feed a downstream Zephr user and entitlement model.',
-    category: 'Identity',
-    author: 'Editorial Demo Desk',
-    readTime: '4 min read',
+    slug: 'boardrooms-prepare-for-a-slower-cleaner-ma-cycle',
+    title: 'Boardrooms are preparing for a slower, cleaner M&A cycle where financing certainty matters more than bravado',
+    dek: 'Chief financial officers are relearning how to price timing risk, antitrust friction and shareholder patience into every serious transaction conversation.',
+    category: 'M&A',
+    author: 'Daniel Hsu',
+    readTime: '8 min read',
     teaser: [
-      'Enterprise media teams often already have a primary identity provider for staff, partners, or corporate buyers. That is convenient for sign-in, but it does not automatically solve downstream audience management.',
-      'If the site still relies on Zephr for user state, product access, or subscription journeys, the missing piece is the bridge that turns a SAML assertion into a Zephr-recognized user and session.'
+      'The return of M&A has been forecast so often that many finance leaders have stopped treating market optimism as a signal in itself. What matters now is not whether deals can be announced, but whether they can survive scrutiny from boards, lenders and shareholders who have become more demanding about execution quality.',
+      'That is why the current cycle feels different from the exuberant periods that preceded it. Buyers are still willing to pay for scale, distribution and scarce technology, but they are less willing to rely on heroic synergy assumptions or aggressive refinancing hopes. They want transactions that can be defended under multiple funding and macro scenarios, not just under the cleanest one.'
     ],
     premium: [
-      'In this demo, the SAML IdP remains the authentication authority while Zephr remains the entitlement and wall authority. After the assertion is validated, the bridge maps the upstream subject and attributes into a Zephr-shaped user profile.',
-      'That pattern lets the front end keep using Zephr JS and Zephr-managed walls, while the custom server logic stays responsible for trust decisions, just-in-time provisioning, and session synchronization.'
+      'This caution is reshaping the internal sequence of a deal. Financing workstreams are starting earlier, diligence is being used to test downside resilience rather than just value creation, and boards are asking management teams to describe what happens if the market backdrop deteriorates mid-process. In practice, that means treasury, legal and strategy teams are spending more time together before formal announcements are made.',
+      'The result is a market that may appear slower on the surface but is arguably healthier beneath it. Transactions that reach signing tend to be built on clearer assumptions, stronger lender engagement and a more explicit understanding of regulatory risk. That does not eliminate failed deals, but it reduces the number of transactions launched on wishful thinking alone.',
+      'For advisers and lenders, the message is equally sharp. Their relevance increasingly depends on their ability to reduce uncertainty rather than simply maximise headline ambition. The advisers that win trusted roles are the ones who can tell a board not only how to get a deal done, but also when not to stretch for one.'
     ]
   },
   {
-    slug: 'registration-walls-on-article-pages',
-    title: 'How to place a Zephr-managed registration wall on an article page',
-    dek: 'A sample article page with a teaser, a premium section, and a dedicated selector that your Zephr admin configuration can target.',
-    category: 'Product',
-    author: 'Platform Strategy Team',
-    readTime: '3 min read',
+    slug: 'treasurers-are-rebuilding-liquidity-playbooks-after-the-easy-money-era',
+    title: 'Corporate treasurers are rebuilding liquidity playbooks after the easy-money era',
+    dek: 'The discipline returning to cash forecasting, revolver usage and short-term investment policy says as much about confidence as any earnings guidance update.',
+    category: 'Treasury',
+    author: 'Nina Farrow',
+    readTime: '7 min read',
     teaser: [
-      'For a believable demo, article pages should not immediately redirect away. They should show enough public context for anonymous users to understand what they would unlock by registering or logging in.',
-      'That is why this proof of concept renders a teaser first, then exposes a stable wall container on the article page for Zephr to control.'
+      'Treasury departments spent years operating in an environment where excess cash earned very little and revolving facilities were often treated as contingent backstops rather than actively modelled tools. That mindset is fading. As rates, refinancing costs and cash-yield trade-offs have shifted, the treasury function has regained strategic prominence.',
+      'The change is visible in small decisions as much as large ones. Forecasting cycles are tighter, intragroup funding assumptions are being challenged more frequently, and boards are asking sharper questions about where liquidity sits, how quickly it can move, and what hidden constraints might emerge under stress.'
     ],
     premium: [
-      'The selector on the demo page is designed to be durable: Zephr can target it with a browser feature, HTML feature, or a configured login or registration journey. The app itself does not hard-code the form.',
-      'Once the user authenticates upstream and the bridge has created the downstream Zephr session, the same article URL can render the full body and any client-side Zephr JS checks can observe a signed-in visitor.'
+      'This matters because liquidity management is no longer just a defensive exercise. The quality of a treasury operation now influences a company’s ability to act on acquisitions, absorb volatility in working capital and defend its cost of capital narrative with investors. Companies that understand their cash architecture in detail can move faster when opportunities appear, because they know which buffers are real and which are accounting conveniences.',
+      'There is also a behavioural shift underway. Treasurers are reassessing the mix between operational cash, strategic reserves and return-seeking short-duration assets. The best teams are not maximising yield indiscriminately; they are calibrating liquidity according to operational cadence, regulatory exposure and the board’s tolerance for complexity. In that sense, the renewed focus on treasury discipline is as much about institutional confidence as it is about market mechanics.'
+    ]
+  },
+  {
+    slug: 'inside-the-chief-investment-officers-new-rate-regime-playbook',
+    title: 'Inside the chief investment officer’s new-rate-regime playbook',
+    dek: 'Higher nominal yields have not simplified portfolio construction. They have made the trade-offs between liquidity, convexity and underwriting quality much harder to ignore.',
+    category: 'Asset Allocation',
+    author: 'Leah Mercier',
+    readTime: '9 min read',
+    teaser: [
+      'A higher-rate world was supposed to restore simplicity to institutional investing. In theory, allocators could rebuild income through conventional fixed income and reduce their dependence on illiquidity premia. In practice, the opposite has happened: higher yields have clarified just how many portfolio decisions were being masked by the old regime.',
+      'Chief investment officers now have more income on offer, but they also have more decisions to make about term risk, liquidity needs and the role of active underwriting. The question is no longer simply whether private assets are worth the lock-up. It is whether each additional unit of complexity is still being paid for after public markets have repriced.'
+    ],
+    premium: [
+      'That has made manager selection more analytical. Allocators are probing what precisely drives excess return, where underwriting edge resides, and how a strategy behaves if exit markets remain selective for longer than expected. The days when a broad promise of illiquidity premium was enough to justify a sleeve are receding. Investors want to know what work the capital is actually doing.',
+      'At the same time, portfolio construction conversations are becoming more integrated across asset silos. Private credit, structured assets, liquid credit and hedging overlays are being discussed as interacting tools rather than isolated buckets. The winning playbook is less about choosing a single fashionable asset class and more about understanding the relative price of flexibility. In this regime, optionality has become one of the most expensive assets in the room.'
     ]
   }
 ];
