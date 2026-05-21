@@ -544,7 +544,6 @@ export function renderDocument(options: RenderDocumentOptions) {
             </div>
             <div class="masthead-utility">
               <a class="button secondary" href="/articles">Latest coverage</a>
-              <a class="button secondary" href="/me">Reader state</a>
             </div>
           </div>
           <nav class="nav-bar" aria-label="Primary">

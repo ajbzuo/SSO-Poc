@@ -32,27 +32,6 @@ function logoutButton(auth?: SessionState) {
   return '<form method="post" action="/auth/logout"><button type="submit" class="button warn">Logout</button></form>';
 }
 
-function samlLoginHintForm(returnTo: string, formIdSuffix: string) {
-  const safeReturn = escapeHtml(returnTo);
-  const idSuffix = formIdSuffix.replace(/[^a-zA-Z0-9_-]/g, '-');
-  const fieldId = `login-hint-${idSuffix}`;
-  return `
-    <div class="card stack saml-hint-panel subtle">
-      <div class="story-kicker">Institutional access</div>
-      <h3 style="margin:0;">Single sign-on for subscribed firms</h3>
-      <p class="meta">Keep the entry point generic on the page while Zephr or your SSO broker decides the right client journey. If the visitor already has an active corporate session, the handoff can complete with little or no extra input.</p>
-      <form method="get" action="/auth/saml/login" class="saml-hint-form">
-        <input type="hidden" name="returnTo" value="${safeReturn}" />
-        <label for="${fieldId}" class="meta" style="font-weight:700;">Work email (optional login hint)</label>
-        <input id="${fieldId}" name="login_hint" type="email" autocomplete="username" inputmode="email" placeholder="reader@firm.com" class="saml-hint-input" />
-        <div class="actions">
-          <button type="submit" class="button">Sign in with institutional access</button>
-        </div>
-      </form>
-      <p class="meta">Allowlisted hints such as <code>login_hint</code>, <code>domain_hint</code>, and <code>hd</code> are forwarded only when your IdP flow supports them.</p>
-    </div>`;
-}
-
 function renderStoryCards(articles: DemoArticle[]) {
   return articles
     .map(
@@ -93,11 +72,8 @@ export function renderHomePage(config: AppConfig, auth?: SessionState) {
       <div class="actions">
         <a class="button" href="/articles/${encodeURIComponent(lead.slug)}">Open lead investigation</a>
         <a class="button secondary" href="/articles">Browse all coverage</a>
-        <a class="button secondary" href="/protected">Subscriber briefing demo</a>
-        <a class="button secondary" href="/setup-guide">Integration guide</a>
         ${logoutButton(auth)}
       </div>
-      ${samlLoginHintForm(`/articles/${lead.slug}`, 'front-page')}
     </section>
 
     <section class="grid">
@@ -162,74 +138,23 @@ export function renderHomePage(config: AppConfig, auth?: SessionState) {
       <section class="card stack">
         <div class="section-heading">
           <div>
-            <div class="story-kicker">Premium logic</div>
-            <h2>How the paywall flow behaves</h2>
+            <div class="story-kicker">Subscriber report</div>
+            <h2>Why premium editorial structure matters</h2>
           </div>
-          <p>Preserve a realistic reading journey while leaving wall logic in Zephr.</p>
+          <p>A paywall feels much more believable inside a real reading experience.</p>
         </div>
-        <p>The site intentionally behaves like a premium publication instead of a utilitarian proof of concept. Readers can absorb enough editorial context to understand the value of the story before they hit the premium section wrapped by the Zephr feature markers.</p>
-        <pre>${renderJson(
-          auth?.isAuthenticated
-            ? {
-                status: 'subscriber-session-present',
-                zephrUserId: auth.zephrUser.id,
-                matchedBy: auth.matchedBy,
-                grantEvaluation: auth.zephrGrantAccess,
-                sessionSync: auth.sessionSync
-              }
-            : {
-                status: 'anonymous-reader',
-                paywallStrategy: 'use Zephr-managed wall on article pages',
-                route: '/auth/saml/login?returnTo=/articles/' + lead.slug
-              }
-        )}</pre>
+        <p>The front page now behaves like a publication instead of a product sandbox. Long reads can open publicly, move into premium analysis, and rely on Zephr for gating without the page needing to explain its own mechanics to the reader.</p>
+        <p>That keeps the story, the publication brand, and the paywall moment all in the same editorial language. It also gives you cleaner space to test different Zephr journeys later without redesigning the entire site again.</p>
       </section>
       <section class="card stack">
         <div class="section-heading">
           <div>
-            <div class="story-kicker">Zephr surfaces</div>
-            <h2>Reusable wall targets</h2>
+            <div class="story-kicker">For editorial demos</div>
+            <h2>Designed for premium journeys</h2>
           </div>
-          <p>These slots stay stable while you redesign journeys in Zephr.</p>
+          <p>The public pages now stay focused on content first.</p>
         </div>
-        <div class="wall-slot zephr-feature-slot" id="zephr-login-wall-slot">
-          <strong>${escapeHtml(config.zephr.wallLabels.login)}</strong>
-          <p>Target selector: <code>#zephr-login-wall-slot</code></p>
-        </div>
-        <div class="wall-slot zephr-feature-slot" id="zephr-registration-wall-slot">
-          <strong>${escapeHtml(config.zephr.wallLabels.registration)}</strong>
-          <p>Target selector: <code>#zephr-registration-wall-slot</code></p>
-        </div>
-      </section>
-    </section>
-
-    <section class="grid two">
-      <section class="card stack">
-        <div class="section-heading">
-          <div>
-            <div class="story-kicker">Browser runtime</div>
-            <h2>Zephr browser-side session view</h2>
-          </div>
-          <p>Useful once the CDN or browser SDK is plugged in.</p>
-        </div>
-        <h3>SDK runtime</h3>
-        <pre id="browser-sdk-status">Waiting for page load...</pre>
-        <h3>Anonymous session</h3>
-        <pre id="browser-anon-session">Waiting for optional BlaizeSDK.getAnonymousSession(...)</pre>
-        <h3>Account</h3>
-        <pre id="browser-account">Waiting for BlaizeSDK.getAccount(...)</pre>
-        <h3>Profile</h3>
-        <pre id="browser-profile">Waiting for BlaizeSDK.getProfile(...)</pre>
-      </section>
-      <section class="card stack">
-        <div class="section-heading">
-          <div>
-            <div class="story-kicker">Newsroom intent</div>
-            <h2>Why this redesign helps the demo</h2>
-          </div>
-          <p>Stakeholders can evaluate the whole audience journey, not just auth plumbing.</p>
-        </div>
-        <p>With long reads, sectional navigation and a stronger editorial tone, the paywall moment now sits inside a more believable premium product. That makes it easier to discuss conversion, reader trust and client-specific access patterns without first asking people to imagine a real website around the POC.</p>
+        <p>Each article template carries a consistent premium section, so you can add Zephr walls, registration journeys, or subscriber experiences without surfacing internal implementation notes on the page itself.</p>
       </section>
     </section>`;
 
@@ -275,7 +200,6 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
   const teaserMarkup = article.teaser.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('');
   const premiumMarkup = article.premium.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('');
   const articlePath = `/articles/${article.slug}`;
-  const loginUrl = `/auth/saml/login?returnTo=${encodeURIComponent(articlePath)}`;
 
   const body = `
     <section class="hero">
@@ -285,7 +209,6 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
       <p class="story-meta">By ${escapeHtml(article.author)} · ${escapeHtml(article.readTime)}</p>
       ${authPill(auth)}
       <div class="actions">
-        <a class="button" href="${loginUrl}">${isAuthenticated ? 'Refresh subscriber session' : 'Sign in with institutional access'}</a>
         <a class="button secondary" href="/articles">Back to all coverage</a>
         ${logoutButton(auth)}
       </div>
@@ -308,61 +231,29 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
           <article class="card article-copy">
             <div class="section-heading">
               <div>
-                <div class="story-kicker">Subscriber section</div>
-                <h2>${isAuthenticated ? 'Full article unlocked' : 'Premium analysis continues beyond the wall'}</h2>
+                <div class="story-kicker">Premium edition</div>
+                <h2>${isAuthenticated ? 'Full article' : 'Continue reading'}</h2>
               </div>
-              <p>${isAuthenticated ? 'The Zephr grant check has already passed for this session.' : 'This is the section to target with Zephr HTML/browser features.'}</p>
+              <p>${isAuthenticated ? 'Subscriber access is active for this session.' : 'This section can be unlocked through your subscription journey.'}</p>
             </div>
             <!-- ZEPHR_FEATURE sso-regwall -->
             ${
               isAuthenticated
                 ? `
                   <div class="wall-slot zephr-feature-slot" id="zephr-article-wall-slot">
-                    <div>Your sites feature HTML here...</div>
                     ${premiumMarkup}
                   </div>
                 `
                 : `
                   <div class="wall-slot zephr-feature-slot" id="zephr-article-wall-slot">
-                    <div>Your sites feature HTML here...</div>
-                    <strong>Subscriber paywall slot</strong>
-                    <p>Target selector: <code>#zephr-article-wall-slot</code></p>
-                    <p class="meta">Use this slot for your Zephr paywall or registration wall. The SSO CTA can open <code>/auth/saml/login?returnTo=${escapeHtml(articlePath)}</code> in the same tab, a new tab, or a popup depending on the client journey you want to mimic.</p>
                   </div>
                 `
             }
             <!-- ZEPHR_FEATURE_END sso-regwall -->
           </article>
-
-          <article class="card stack">
-            <div class="section-heading">
-              <div>
-                <div class="story-kicker">Verification panel</div>
-                <h2>What the backend decided</h2>
-              </div>
-              <p>Helpful during demos and QA.</p>
-            </div>
-            <pre>${renderJson(
-              isAuthenticated
-                ? {
-                    article: article.slug,
-                    access: 'granted',
-                    zephrUserId: auth?.zephrUser.id,
-                    externalId: auth?.samlIdentity.externalId,
-                    grantEvaluation: auth?.zephrGrantAccess,
-                    matchedBy: auth?.matchedBy
-                  }
-                : {
-                    article: article.slug,
-                    access: 'teaser-only',
-                    nextStep: 'Trigger Zephr wall or direct SSO start URL.'
-                  }
-            )}</pre>
-          </article>
         </div>
 
         <aside class="article-aside">
-          ${samlLoginHintForm(articlePath, `article-${article.slug}`)}
           <section class="card stack">
             <div class="story-kicker">Editor’s note</div>
             <div class="quote-panel">
@@ -405,51 +296,24 @@ export function renderProtectedPage(config: AppConfig, auth?: SessionState) {
   const body = `
     <section class="hero">
       <div class="eyebrow">Subscriber briefing</div>
-      <h1>${auth?.isAuthenticated ? 'The institutional briefing is unlocked.' : 'This briefing remains subscriber-only until SSO and Zephr access checks pass.'}</h1>
-      <p class="lead-copy">Use this route when you want a non-editorial premium destination as part of the same SSO and Zephr decisioning flow.</p>
+      <h1>${auth?.isAuthenticated ? 'The institutional briefing is unlocked.' : 'This briefing remains reserved for subscribers.'}</h1>
+      <p class="lead-copy">Use this route when you want a non-editorial premium destination alongside the publication-style article experience.</p>
       <div class="actions">
-        <a class="button" href="/auth/saml/login?returnTo=/protected">${auth?.isAuthenticated ? 'Refresh SSO session' : 'Authenticate now'}</a>
         <a class="button secondary" href="/">Back to front page</a>
+        ${logoutButton(auth)}
       </div>
-      ${samlLoginHintForm('/protected', 'protected')}
     </section>
 
     <section class="grid two">
-      <section class="card stack">
+      <section class="card stack subtle">
         <div class="section-heading">
           <div>
-            <div class="story-kicker">Access state</div>
-            <h2>Server-side decision</h2>
+            <div class="story-kicker">Subscriber note</div>
+            <h2>Reserved access destination</h2>
           </div>
-          <p>Useful for testing non-article premium routes.</p>
+          <p>Useful for premium briefings or research hubs.</p>
         </div>
-        <pre>${renderJson(
-          auth?.isAuthenticated
-            ? {
-                result: 'allowed',
-                zephrUserId: auth.zephrUser.id,
-                grantEvaluation: auth.zephrGrantAccess,
-                matchedBy: auth.matchedBy
-              }
-            : {
-                result: 'denied',
-                message: 'Authenticate through SSO and pass the Zephr grant check.'
-              }
-        )}</pre>
-      </section>
-      <section class="card stack">
-        <div class="section-heading">
-          <div>
-            <div class="story-kicker">Protected wall slot</div>
-            <h2>Attach alternate journeys here</h2>
-          </div>
-          <p>Ideal for subscriber briefings or research hubs.</p>
-        </div>
-        <div class="wall-slot zephr-feature-slot" id="zephr-protected-wall-slot">
-          <strong>${escapeHtml(config.zephr.wallLabels.protected)}</strong>
-          <p>Target selector: <code>#zephr-protected-wall-slot</code></p>
-          <p class="meta">Use this target for a Zephr browser or HTML feature that contains the SSO CTA or your alternate access journey.</p>
-        </div>
+        <p>This route is available if you want a non-article premium destination on the site. It can stay behind a Zephr-controlled access journey without exposing any implementation details in the page itself.</p>
       </section>
     </section>`;
 
