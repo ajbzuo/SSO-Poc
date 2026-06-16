@@ -130,8 +130,7 @@ Useful optional variables:
 
 - `ZEPHR_SITE_ID`
 - `ZEPHR_PUBLIC_BASE_URL`
-- `ZEPHR_BROWSER_SDK_URL`
-- `ZEPHR_CREATE_ANON_SESSION`
+- `ZEPHR_BROWSER_DEBUG`
 - `ZEPHR_FOREIGN_KEY_NAME`
 - `ZEPHR_REQUIRED_GRANT_IDS`
 - `ZEPHR_REQUIRED_PRODUCT_IDS`
@@ -165,7 +164,7 @@ The admin requests are HMAC-signed.
 - IdP login-hint forwarding on an allowlist basis
 - Zephr user lookup by external subject or email
 - Zephr active-grant enforcement before content unlock
-- a site experience that still uses Zephr wall markers and browser/CDN targets
+- a site experience that still uses Zephr wall markers and the bundled `@zephr/browser` runtime
 
 ## Remaining tenant-specific seam
 

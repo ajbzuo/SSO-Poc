@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import session from 'express-session';
 import passport from 'passport';
@@ -25,6 +27,12 @@ export function createApp(overrides?: Partial<AppDependencies>) {
 
   app.use(express.urlencoded({ extended: false }));
   app.use(express.json());
+
+  const zephrBrowserDistPath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../node_modules/@zephr/browser/dist'
+  );
+  app.use('/assets/zephr-browser', express.static(zephrBrowserDistPath));
   app.use(
     session({
       name: 'zephr_saml_poc',

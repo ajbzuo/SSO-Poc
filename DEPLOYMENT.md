@@ -26,9 +26,8 @@ Required environment variables:
 - `ZEPHR_ADMIN_ACCESS_KEY`
 - `ZEPHR_ADMIN_SECRET_KEY`
 - `ZEPHR_SITE_ID` (optional, but recommended)
-- `ZEPHR_PUBLIC_BASE_URL` (optional)
-- `ZEPHR_BROWSER_SDK_URL` (optional)
-- `ZEPHR_CREATE_ANON_SESSION` (optional)
+- `ZEPHR_PUBLIC_BASE_URL` (optional; enables bundled `@zephr/browser`)
+- `ZEPHR_BROWSER_DEBUG` (optional)
 - `ZEPHR_FOREIGN_KEY_NAME` (optional, default `SAML_SUBJECT`)
 - `ZEPHR_REQUIRED_GRANT_IDS` (optional)
 - `ZEPHR_REQUIRED_PRODUCT_IDS` (optional)
@@ -47,9 +46,9 @@ Required environment variables:
 
 ## CDN notes
 
-If you use a third-party CDN in front of the app and still want Zephr out-of-the-box browser functionality:
+If you use a third-party CDN in front of the app and still want Zephr browser functionality:
 
-- proxy `/blaize*` and `/zephr*` on the same origin
+- proxy `/zephr*` on the same origin so `@zephr/browser` can reach feature and decision endpoints
 - do not cache `/auth/saml/acs`
 - do not cache `/auth/logout`
 - forward cookies and query strings

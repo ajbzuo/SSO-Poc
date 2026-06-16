@@ -2,9 +2,9 @@ interface RenderDocumentOptions {
   title: string;
   body: string;
   appState: unknown;
-  zephrBrowserSdkUrl?: string;
   zephrPublicBaseUrl?: string;
-  createAnonymousSession?: boolean;
+  zephrBrowserEnabled?: boolean;
+  zephrBrowserDebug?: boolean;
 }
 
 function escapeForHtml(value: string) {
@@ -18,8 +18,8 @@ function escapeForHtml(value: string) {
 
 export function renderDocument(options: RenderDocumentOptions) {
   const serializedState = JSON.stringify(options.appState, null, 2).replaceAll('<', '\\u003c');
-  const browserSdkScript = options.zephrBrowserSdkUrl
-    ? `<script defer src="${escapeForHtml(options.zephrBrowserSdkUrl)}"></script>`
+  const browserSdkScript = options.zephrBrowserEnabled
+    ? '<script defer src="/assets/zephr-browser/zephr-browser.umd.js"></script>'
     : '';
 
   return `<!DOCTYPE html>
@@ -408,6 +408,13 @@ export function renderDocument(options: RenderDocumentOptions) {
         display: grid;
         gap: 18px;
       }
+      .article-paywall-shell.is-empty {
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+      }
       .article-aside {
         position: sticky;
         top: 18px;
@@ -555,14 +562,14 @@ export function renderDocument(options: RenderDocumentOptions) {
         </header>
         <main class="content-shell">
           ${options.body}
-          <p class="footer-note">Zephr public base URL: ${escapeForHtml(options.zephrPublicBaseUrl ?? 'not configured')} · Browser SDK: ${escapeForHtml(options.zephrBrowserSdkUrl ?? 'not configured')}</p>
+          <p class="footer-note">Zephr CDN API: ${escapeForHtml(options.zephrPublicBaseUrl ?? 'not configured')} · Browser runtime: ${escapeForHtml(options.zephrBrowserEnabled ? '@zephr/browser (bundled)' : 'disabled')}</p>
         </main>
       </div>
     </div>
     <script>
       window.__APP_STATE__ = ${serializedState};
       window.__ZEPHR_PUBLIC_BASE_URL__ = ${JSON.stringify(options.zephrPublicBaseUrl ?? null)};
-      window.__ZEPHR_CREATE_ANON_SESSION__ = ${JSON.stringify(options.createAnonymousSession ?? false)};
+      window.__ZEPHR_BROWSER_DEBUG__ = ${JSON.stringify(options.zephrBrowserDebug ?? false)};
 
       function writeJson(id, value) {
         var el = document.getElementById(id);
@@ -570,39 +577,46 @@ export function renderDocument(options: RenderDocumentOptions) {
         el.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
       }
 
-      function renderZephrBrowserState() {
-        if (!window.BlaizeSDK) {
-          writeJson('browser-sdk-status', { available: false, message: 'BlaizeSDK was not found. Add ZEPHR_BROWSER_SDK_URL when you are ready to load the Zephr CDN/browser runtime.' });
-          return;
-        }
-
-        function readAccountState() {
+      function runZephrBrowser() {
+        if (!window.__ZEPHR_PUBLIC_BASE_URL__) {
           writeJson('browser-sdk-status', {
-            available: true,
-            message: 'BlaizeSDK loaded successfully for CDN/browser-side Zephr checks.',
-            createAnonymousSession: Boolean(window.__ZEPHR_CREATE_ANON_SESSION__)
-          });
-          window.BlaizeSDK.getAccount(function(error, account) {
-            writeJson('browser-account', error ? { error: String(error) } : account);
-          });
-          window.BlaizeSDK.getProfile(function(error, profile) {
-            writeJson('browser-profile', error ? { error: String(error) } : profile);
-          });
-        }
-
-        if (window.__ZEPHR_CREATE_ANON_SESSION__ && typeof window.BlaizeSDK.getAnonymousSession === 'function') {
-          window.BlaizeSDK.getAnonymousSession(function(error, session) {
-            writeJson('browser-anon-session', error ? { error: String(error) } : session);
-            readAccountState();
+            available: false,
+            message: 'Set ZEPHR_PUBLIC_BASE_URL to enable the bundled @zephr/browser runtime.'
           });
           return;
         }
 
-        writeJson('browser-anon-session', { skipped: true, message: 'Anonymous session bootstrap not requested.' });
-        readAccountState();
+        if (!window.zephrBrowser || typeof window.zephrBrowser.run !== 'function') {
+          writeJson('browser-sdk-status', {
+            available: false,
+            message: '@zephr/browser was not found. Confirm /assets/zephr-browser/zephr-browser.umd.js is being served.'
+          });
+          return;
+        }
+
+        window.zephrBrowser.run({
+          cdnApi: window.__ZEPHR_PUBLIC_BASE_URL__,
+          debug: Boolean(window.__ZEPHR_BROWSER_DEBUG__)
+        }).catch(function(error) {
+          writeJson('browser-sdk-status', {
+            available: false,
+            message: 'zephrBrowser.run() failed.',
+            error: String(error)
+          });
+        });
       }
 
-      window.addEventListener('load', renderZephrBrowserState);
+      window.addEventListener('zephr.browserDecisionsFinished', function() {
+        writeJson('browser-sdk-status', {
+          available: true,
+          message: '@zephr/browser finished evaluating page features.',
+          cdnApi: window.__ZEPHR_PUBLIC_BASE_URL__
+        });
+        writeJson('browser-access', window.Zephr && window.Zephr.accessDetails ? window.Zephr.accessDetails : { message: 'No Zephr access details were published for this page.' });
+        writeJson('browser-outcomes', window.Zephr && window.Zephr.outcomes ? window.Zephr.outcomes : { message: 'No Zephr outcomes were published for this page.' });
+      });
+
+      window.addEventListener('load', runZephrBrowser);
     </script>
   </body>
 </html>`;

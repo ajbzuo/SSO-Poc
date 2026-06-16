@@ -1,7 +1,16 @@
 import type { AppConfig } from '../config.js';
 import type { SessionState } from '../lib/auth/bridge.js';
 import { demoArticles, type DemoArticle } from '../lib/content/articles.js';
+import { ZEPHR_ARTICLE_PAYWALL_FEATURE, ZEPHR_ARTICLE_PAYWALL_SELECTOR } from '../lib/zephr/browser.js';
 import { renderDocument } from './layout.js';
+
+function zephrDocumentOptions(config: AppConfig) {
+  return {
+    zephrPublicBaseUrl: config.zephr.publicBaseUrl,
+    zephrBrowserEnabled: config.zephr.browserEnabled,
+    zephrBrowserDebug: config.zephr.browserDebug
+  };
+}
 
 function escapeHtml(value: string) {
   return value
@@ -182,9 +191,7 @@ export function renderHomePage(config: AppConfig, auth?: SessionState) {
     title: 'Ledger Chronicle',
     body,
     appState: { auth },
-    zephrBrowserSdkUrl: config.zephr.browserSdkUrl,
-    zephrPublicBaseUrl: config.zephr.publicBaseUrl,
-    createAnonymousSession: config.zephr.createAnonymousSession
+    ...zephrDocumentOptions(config)
   });
 }
 
@@ -209,9 +216,7 @@ export function renderArticlesIndexPage(config: AppConfig, articles: DemoArticle
     title: 'Latest coverage',
     body,
     appState: { auth, articles: articles.map(({ slug, title }) => ({ slug, title })) },
-    zephrBrowserSdkUrl: config.zephr.browserSdkUrl,
-    zephrPublicBaseUrl: config.zephr.publicBaseUrl,
-    createAnonymousSession: config.zephr.createAnonymousSession
+    ...zephrDocumentOptions(config)
   });
 }
 
@@ -249,19 +254,12 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
           </article>
 
           <!-- ZEPHR_FEATURE sso-regwall -->
-          <article class="card article-copy">
-            ${
-              isAuthenticated
-                ? `
-                  <div class="wall-slot zephr-feature-slot" id="zephr-article-wall-slot">
-                    ${premiumMarkup}
-                  </div>
-                `
-                : `
-                  <div class="wall-slot zephr-feature-slot" id="zephr-article-wall-slot">
-                  </div>
-                `
-            }
+          <article
+            class="card article-copy zephr-feature-slot article-paywall-shell${isAuthenticated ? '' : ' is-empty'}"
+            id="zephr-article-wall-slot"
+            data-zephr-feature="${ZEPHR_ARTICLE_PAYWALL_FEATURE}"
+          >
+            ${isAuthenticated ? premiumMarkup : ''}
           </article>
           <!-- ZEPHR_FEATURE_END sso-regwall -->
         </div>
@@ -299,9 +297,7 @@ export function renderArticlePage(config: AppConfig, article: DemoArticle, auth?
     title: article.title,
     body,
     appState: { auth, article: { slug: article.slug, title: article.title } },
-    zephrBrowserSdkUrl: config.zephr.browserSdkUrl,
-    zephrPublicBaseUrl: config.zephr.publicBaseUrl,
-    createAnonymousSession: config.zephr.createAnonymousSession
+    ...zephrDocumentOptions(config)
   });
 }
 
@@ -334,9 +330,7 @@ export function renderProtectedPage(config: AppConfig, auth?: SessionState) {
     title: 'Subscriber briefing',
     body,
     appState: { auth },
-    zephrBrowserSdkUrl: config.zephr.browserSdkUrl,
-    zephrPublicBaseUrl: config.zephr.publicBaseUrl,
-    createAnonymousSession: config.zephr.createAnonymousSession
+    ...zephrDocumentOptions(config)
   });
 }
 
@@ -394,21 +388,23 @@ export function renderSetupGuidePage(config: AppConfig) {
           <li>Ensure the user already exists in Zephr before SSO is attempted.</li>
           <li>Store the upstream SAML subject in a Zephr foreign key named <code>${escapeHtml(config.zephr.foreignKeyName)}</code> if you want the strongest match.</li>
           <li>Confirm the user has at least one active grant, or one of the required grant/product IDs if you configured filters.</li>
-          <li>Keep the wall itself in Zephr and target the premium article slot wrapped by <code><!-- ZEPHR_FEATURE sso-regwall --></code>.</li>
+          <li>Keep the wall itself in Zephr and target the premium article slot with CSS selector <code>${escapeHtml(ZEPHR_ARTICLE_PAYWALL_SELECTOR)}</code> (alternatives: <code>#zephr-article-wall-slot</code> or <code>.zephr-feature-slot</code>).</li>
+          <li>Comment tags around <code><!-- ZEPHR_FEATURE sso-regwall --></code> remain in the markup for reference, but browser-side features should use the CSS selector integration mode.</li>
         </ol>
       </article>
 
       <article class="card stack">
         <div class="section-heading">
           <div>
-            <div class="story-kicker">CDN and browser runtime</div>
+            <div class="story-kicker">Browser runtime</div>
             <h2>What the front end needs</h2>
           </div>
         </div>
         <ol>
-          <li>If you are using a third-party CDN, proxy all <code>/blaize*</code> and <code>/zephr*</code> requests on the same origin.</li>
-          <li>Set <code>ZEPHR_BROWSER_SDK_URL</code> and <code>ZEPHR_PUBLIC_BASE_URL</code> if you want the page to interrogate the Zephr browser runtime.</li>
-          <li>If your wall relies on an explicit anonymous session first, set <code>ZEPHR_CREATE_ANON_SESSION=true</code>.</li>
+          <li>Set <code>ZEPHR_PUBLIC_BASE_URL</code> to the same origin Zephr should call for <code>/zephr/features</code> and <code>/zephr/feature-decisions</code>. Proxy those paths through your site if needed.</li>
+          <li>The app bundles <code>@zephr/browser</code> from npm and serves it at <code>/assets/zephr-browser/zephr-browser.umd.js</code>.</li>
+          <li>On page load the site calls <code>zephrBrowser.run({ cdnApi: ZEPHR_PUBLIC_BASE_URL })</code>.</li>
+          <li>Optionally set <code>ZEPHR_BROWSER_DEBUG=true</code> to enable verbose browser logging.</li>
         </ol>
       </article>
     </section>`;
@@ -419,9 +415,9 @@ export function renderSetupGuidePage(config: AppConfig) {
     appState: {
       requiredGrantIds: config.zephr.requiredGrantIds,
       requiredProductIds: config.zephr.requiredProductIds,
-      foreignKeyName: config.zephr.foreignKeyName
+      foreignKeyName: config.zephr.foreignKeyName,
+      paywallSelector: ZEPHR_ARTICLE_PAYWALL_SELECTOR
     },
-    zephrBrowserSdkUrl: config.zephr.browserSdkUrl,
-    zephrPublicBaseUrl: config.zephr.publicBaseUrl
+    ...zephrDocumentOptions(config)
   });
 }

@@ -50,9 +50,7 @@ services:
         sync: false
       - key: ZEPHR_PUBLIC_BASE_URL
         sync: false
-      - key: ZEPHR_BROWSER_SDK_URL
-        sync: false
-      - key: ZEPHR_CREATE_ANON_SESSION
+      - key: ZEPHR_BROWSER_DEBUG
         value: "false"
       - key: ZEPHR_FOREIGN_KEY_NAME
         value: SAML_SUBJECT
